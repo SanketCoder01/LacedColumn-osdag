@@ -2107,21 +2107,24 @@ class Window(QMainWindow):
             if error is not None:
                 self.show_error_msg(error)
                 # Don't return here, continue to show results even if there are errors
-                self.textEdit.append("\nCalculation Results:")
-                self.textEdit.append("-------------------")
+                # self.textEdit.append("\nCalculation Results:")
+                # self.textEdit.append("-------------------")
 
             out_list = main.output_values(status)
             print('out_list changed',out_list)
 
             # Show calculation results in textEdit
-            self.textEdit.append("\nDetailed Results:")
-            self.textEdit.append("----------------")
+            # self.textEdit.append("\nDetailed Results:")
+            # self.textEdit.append("----------------")
             
             for option in out_list:
                 if option[2] == TYPE_TITLE:
-                    self.textEdit.append(f"\n{option[1]}:")
+                    # Skip printing section headers to log window
+                    pass
                 elif option[2] == TYPE_TEXTBOX and option[3]:
-                    self.textEdit.append(f"{option[1]}: {option[3]}")
+                    # Only print actual values, not headers or specific messages
+                    if not any(header in option[1] for header in ["Section and Material:", "Design Parameters:", "Welding Details:", "Lacing Details:", "Tie Plate Details:", "Design Summary:", "Allowed Utilization Ratio:", "Error: An error occurred"]):
+                        self.textEdit.append(f"{option[1]}: {option[3]}")
                 
                 # Update the output dock fields
                 if option[2] == TYPE_TEXTBOX:

@@ -1113,6 +1113,22 @@ class LacedColumn(Member):
                 self.logger.error(f"Error in output_title_change: {str(e)}")
             return [], None, [], 1
 
+    def closeEvent(self, event):
+        """Clear all input values when window is closed"""
+        # Clear all input fields
+        for key in self.input_dictionary:
+            if key in self.design_inputs:
+                self.design_inputs[key] = None
+        
+        # Clear design preferences
+        self.design_pref = {}
+        
+        # Clear output values
+        self.result = {}
+        
+        # Accept the close event
+        event.accept()
+
 
 
 class LacedColumnWindow(QMainWindow):

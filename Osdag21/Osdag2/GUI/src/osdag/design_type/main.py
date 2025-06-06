@@ -267,9 +267,13 @@ class Main():
     #     return d
 
 
-    def get_I_sec_properties(self):
-
-        if '' in self:
+    def get_I_sec_properties(self, *args):
+        """
+        Calculate I-section properties based on input dimensions.
+        Args:
+            *args: List of arguments containing section dimensions
+        """
+        if not args or '' in args:
             mass = ''
             area = ''
             moa_z = ''
@@ -283,31 +287,31 @@ class Main():
             I_t = ''
             I_w = ''
             image = ''
-
         else:
-            D = float(self[0])
-            B = float(self[1])
-            t_w = float(self[2])
-            t_f = float(self[3])
-            sl = float(self[4])
+            try:
+                D = float(args[0])
+                B = float(args[1])
+                t_w = float(args[2])
+                t_f = float(args[3])
+                sl = float(args[4]) if len(args) > 4 else 90.0
 
-            sec_prop = I_sectional_Properties()
-            mass = sec_prop.calc_Mass(D, B, t_w, t_f)
-            area = sec_prop.calc_Area(D, B, t_w, t_f)
-            moa_z = sec_prop.calc_MomentOfAreaZ(D, B, t_w, t_f)
-            moa_y = sec_prop.calc_MomentOfAreaY(D, B, t_w, t_f)
-            rog_z = sec_prop.calc_RogZ(D, B, t_w, t_f)
-            rog_y = sec_prop.calc_RogY(D, B, t_w, t_f)
-            em_z = sec_prop.calc_ElasticModulusZz(D, B, t_w, t_f)
-            em_y = sec_prop.calc_ElasticModulusZy(D, B, t_w, t_f)
-            pm_z = sec_prop.calc_PlasticModulusZpz(D, B, t_w, t_f)
-            pm_y = sec_prop.calc_PlasticModulusZpy(D, B, t_w, t_f)
-            I_t = sec_prop.calc_TorsionConstantIt(D,B,t_w,t_f)
-            I_w = sec_prop.calc_WarpingConstantIw(D,B,t_w, t_f)
-            if sl != 90:
-                image = VALUES_IMG_BEAM[0]
-            else:
-                image = VALUES_IMG_BEAM[1]
+                sec_prop = I_sectional_Properties()
+                mass = sec_prop.calc_Mass(D, B, t_w, t_f)
+                area = sec_prop.calc_Area(D, B, t_w, t_f)
+                moa_z = sec_prop.calc_MomentOfAreaZ(D, B, t_w, t_f)
+                moa_y = sec_prop.calc_MomentOfAreaY(D, B, t_w, t_f)
+                rog_z = sec_prop.calc_RogZ(D, B, t_w, t_f)
+                rog_y = sec_prop.calc_RogY(D, B, t_w, t_f)
+                em_z = sec_prop.calc_ElasticModulusZz(D, B, t_w, t_f)
+                em_y = sec_prop.calc_ElasticModulusZy(D, B, t_w, t_f)
+                pm_z = sec_prop.calc_PlasticModulusZpz(D, B, t_w, t_f)
+                pm_y = sec_prop.calc_PlasticModulusZpy(D, B, t_w, t_f)
+                I_t = sec_prop.calc_TorsionConstantIt(D, B, t_w, t_f)
+                I_w = sec_prop.calc_WarpingConstantIw(D, B, t_w, t_f)
+                image = VALUES_IMG_BEAM[0] if sl != 90 else VALUES_IMG_BEAM[1]
+            except (ValueError, IndexError) as e:
+                print(f"Error calculating section properties: {e}")
+                return {}
 
         d = {'Label_11': str(mass),
              'Label_12': str(area),
@@ -443,21 +447,45 @@ class Main():
 
         return d
 
-    def change_source(self):
-
-        designation = self[0]
-        source = 'Custom'
-        if designation in connectdb("Columns", call_type="dropdown"):
-            source = get_source("Columns", designation)
-        elif designation in connectdb("Beams", call_type="dropdown"):
-            source = get_source("Beams", designation)
-        elif designation in connectdb("Angles", call_type="dropdown"):
-            source = get_source("Angles", designation)
-        elif designation in connectdb("Channels", call_type="dropdown"):
-            source = get_source("Channels", designation)
-
-        d = {KEY_SOURCE: str(source)}
-        return d
+    def change_source(self, *args):
+        """
+        Change the source of section properties.
+        Args:
+            *args: List of arguments containing source information
+        """
+        try:
+            if not args or len(args) < 2:
+                return {}
+                
+            source = args[0]
+            designation = args[1]
+            material_grade = args[2] if len(args) > 2 else ""
+            
+            if source == "Rolled":
+                section = ISection(designation=designation, material_grade=material_grade)
+            elif source == "Welded":
+                section = ISection(designation=designation, material_grade=material_grade, table="Welded")
+            else:
+                return {}
+                
+            return {
+                'Label_11': str(round(section.mass, 2)),
+                'Label_12': str(round(section.area, 2)),
+                'Label_13': str(round(section.mom_inertia_z, 2)),
+                'Label_14': str(round(section.mom_inertia_y, 2)),
+                'Label_15': str(round(section.rad_of_gy_z, 2)),
+                'Label_16': str(round(section.rad_of_gy_y, 2)),
+                'Label_17': str(round(section.elast_sec_mod_z, 2)),
+                'Label_18': str(round(section.elast_sec_mod_y, 2)),
+                'Label_19': str(round(section.plast_sec_mod_z, 2)),
+                'Label_20': str(round(section.plast_sec_mod_y, 2)),
+                'Label_21': str(round(section.It, 2)),
+                'Label_22': str(round(section.Iw, 2)),
+                KEY_IMAGE: VALUES_IMG_BEAM[0] if section.flange_slope != 90 else VALUES_IMG_BEAM[1]
+            }
+        except Exception as e:
+            print(f"Error in change_source: {e}")
+            return {}
 
 
     @staticmethod

@@ -50,6 +50,9 @@ class Ui_Form(QDialog):
         self.setObjectName("DesignPreferences")
         self.setWindowTitle('Design Preference')
         
+        # Initialize do_not_clear_list
+        self.do_not_clear_list = []
+        
         # Create main layout
         main_layout = QVBoxLayout()
         self.setLayout(main_layout)
@@ -117,7 +120,7 @@ class Ui_Form(QDialog):
                 buttons = [(str("pushButton_Add_" + tab_name), 'Add'), (str("pushButton_Clear_" + tab_name), 'Clear'),
                             (str("pushButton_Import_" + tab_name), "Import xlsx file"), (str("pushButton_Download_" + tab_name), "Download xlsx file")]
 
-                elements = tab_elements(main, input_dictionary)
+                elements = tab_elements(input_dictionary)
                 #elements = list(lmao)
                 for i in range(len(buttons)):
                     object_name = buttons[i][0]
@@ -129,7 +132,7 @@ class Ui_Form(QDialog):
                     button.setText(btn_text)
                     button.setFixedSize(button_size_x, button_size_y)
                     if input_dictionary != {}:
-                        if main.module_name(main) == KEY_DISP_BASE_PLATE and input_dictionary[KEY_CONN] == VALUES_CONN_BP[2]:
+                        if main.module_name() == KEY_DISP_BASE_PLATE and KEY_CONN in input_dictionary and input_dictionary[KEY_CONN] == VALUES_CONN_BP[2]:
                             button.setEnabled(False)
 
                 r = 1
@@ -165,7 +168,7 @@ class Ui_Form(QDialog):
                                      KEY_DISP_MOD_OF_ELAST, KEY_DISP_MOD_OF_RIGID, 'Source']:
                             line.setReadOnly(True)
                             self.do_not_clear_list.append(line)
-                        if main.module_name(main) in [KEY_DISP_TENSION_BOLTED, KEY_DISP_TENSION_WELDED] and lable in \
+                        if main.module_name() in [KEY_DISP_TENSION_BOLTED, KEY_DISP_TENSION_WELDED] and lable in \
                                 [KEY_DISP_LOCATION, KEY_DISP_SEC_PROFILE]:
                             line.setReadOnly(True)
                             self.do_not_clear_list.append(line)
@@ -293,7 +296,7 @@ class Ui_Form(QDialog):
                         if element[0] in [KEY_DP_WELD_MATERIAL_G_O]:
                             line.setValidator(dbl_validator)
                             line.setMaxLength(7)
-                        if element[0] in [KEY_DP_DETAILING_GAP] and main.module_name(main) in [KEY_DISP_TENSION_BOLTED, KEY_DISP_TENSION_WELDED]:
+                        if element[0] in [KEY_DP_DETAILING_GAP] and main.module_name() in [KEY_DISP_TENSION_BOLTED, KEY_DISP_TENSION_WELDED]:
                             line.setReadOnly(True)
                             self.do_not_clear_list.append(line)
                         if element[0] in [KEY_BASE_PLATE_FU, KEY_BASE_PLATE_FY, KEY_DP_ANCHOR_BOLT_DESIGNATION_OCF,

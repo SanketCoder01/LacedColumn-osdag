@@ -2633,6 +2633,10 @@ class Window(QMainWindow):
                     self.designPrefDialog.ui.tabWidget.tabs.indexOf(tab), f(input_dock_key.currentText()))
             elif change_typ == TYPE_REMOVE_TAB:
 
+                if tab is None:
+                    print("WARNING: Tab not yet created — skipping preference sync.")
+                    return  # or skip logic safely
+                
                 if tab.objectName() != f(input_dock_key.currentText()):
                     self.designPrefDialog.ui.tabWidget.tabs.removeTab(
                         self.designPrefDialog.ui.tabWidget.tabs.indexOf(tab))

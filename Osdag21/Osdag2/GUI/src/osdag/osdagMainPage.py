@@ -167,6 +167,7 @@ from .design_type.compression_member import Column
 from .design_type.compression_member.compression import Compression
 from .design_type.compression_member.Column import ColumnDesign
 from .design_type.compression_member.laced_column import LacedColumn
+from .design_type.compression_member.Battened_Columns import BattenedColumn
 #from .design_type.beam_column.Beam_Colum_Compression import ColumnDesign
 
 from .design_type.flexural_member.flexure import Flexure
@@ -320,6 +321,7 @@ class OsdagMainWindow(QMainWindow):
                     # ('Beam-Column Design', str(files("osdag.data.ResourceFiles.images").joinpath("BC_CF-BW-Flush.png")), 'Beam_Column_Design'),
                     ('Struts in Trusses', str(files("osdag.data.ResourceFiles.images").joinpath("strut.jpg")), 'Strut_Design'),
                     ('Laced Columns', str(files("osdag.data.ResourceFiles.images").joinpath("laced_column.png")), 'Laced_Column_Design'),
+                    ('Battened Columns', str(files("osdag.data.ResourceFiles.images").joinpath("Battened_columns.jpg")), 'Battened_Column_Design'),
                     self.show_compression_module,
                 ],
                 'Flexural Member' : [
@@ -670,6 +672,13 @@ class OsdagMainWindow(QMainWindow):
             self.ui2 = Ui_ModuleWindow(LacedColumn(), ' ')
             self.ui2.show()
             self.ui2.closed.connect(self.show)
+
+        elif self.findChild(QRadioButton, 'Battened_Column_Design').isChecked():
+            self.hide()
+            self.ui2 = Ui_ModuleWindow(BattenedColumn(), "BattenedColumn")
+            self.ui2.show()
+            self.ui2.closed.connect(self.show)
+
 
     def show_tension_module(self):
         # folder = self.select_workspace_folder()

@@ -1264,8 +1264,14 @@ class Plate(Material):
 class ISection(Material):
 
     def __init__(self, designation, material_grade="", table=""):
+        print(f"DEBUG: Creating ISection with designation='{designation}', material_grade='{material_grade}', table='{table}'")
         if table == "":
-            table = "Beams" if designation in connectdb("Beams", "popup") else "Columns"
+            beams_list = connectdb("Beams", "popup")
+            columns_list = connectdb("Columns", "popup")
+            print(f"DEBUG: Available sections in Beams: {beams_list}")
+            print(f"DEBUG: Available sections in Columns: {columns_list}")
+            table = "Beams" if designation in beams_list else "Columns"
+            print(f"DEBUG: Selected table: {table}")
         self.connect_to_database_update_other_attributes(table, designation, material_grade)
         self.design_status = True
         self.designation = designation
@@ -1311,52 +1317,72 @@ class ISection(Material):
         cur = conn.cursor()
         cur.execute(db_query, (designation,))
         row = cur.fetchone()
-        self.mass = row[2]
-        self.area = row[3] * 100
-        self.depth = row[4]
-        self.flange_width = row[5]
-        self.web_thickness = row[6]
-        self.flange_thickness = row[7]
-        max_thickness = max(self.flange_thickness, self.web_thickness)
-        super(ISection, self).__init__(material_grade, max_thickness)
-        self.flange_slope = row[8]
-        self.root_radius = round(row[9], 2)
-        self.toe_radius = round(row[10], 2)
-        self.mom_inertia_z = round(row[11] * 10000, 2)
-        self.mom_inertia_y = round(row[12] * 10000, 2)
-        self.rad_of_gy_z = round(row[13] * 10, 2)
-        self.rad_of_gy_y = round(row[14] * 10, 2)
-        self.elast_sec_mod_z = round(row[15] * 1000, 2)
-        self.elast_sec_mod_y = round(row[16] * 1000, 2)
-        self.plast_sec_mod_z = round(row[17], 2)
-        from .Section_Properties_Calculator import I_sectional_Properties
-        if self.plast_sec_mod_z is None:  # Todo: add in database
-            self.plast_sec_mod_z = round(I_sectional_Properties().calc_PlasticModulusZpz(self.depth, self.flange_width,
-                                                                                         self.web_thickness,
-                                                                                         self.flange_thickness) * 1000,
-                                         2)
-        else:
-            self.plast_sec_mod_z = round(row[17] * 1000, 2)
+        
+        if row is None:
+            print(f"DEBUG: Tried to find designation '{designation}' in table '{table}' and failed.")
+            print("DEBUG: Available designations in this table are:")
+            cur.execute(f"SELECT Designation FROM {table}")
+            available = [r[0] for r in cur.fetchall()]
+            print(available)
+            if available:
+                print(f"WARNING: Section '{designation}' not found in '{table}'. Using first available section '{available[0]}' as fallback.")
+                designation = available[0]
+                cur.execute(db_query, (designation,))
+                row = cur.fetchone()
+            else:
+                conn.close()
+                raise ValueError(f"No sections available in table '{table}'")
+        
+        try:
+            self.mass = row[2]
+            self.area = row[3] * 100
+            self.depth = row[4]
+            self.flange_width = row[5]
+            self.web_thickness = row[6]
+            self.flange_thickness = row[7]
+            max_thickness = max(self.flange_thickness, self.web_thickness)
+            super(ISection, self).__init__(material_grade, max_thickness)
+            self.flange_slope = row[8]
+            self.root_radius = round(row[9], 2)
+            self.toe_radius = round(row[10], 2)
+            self.mom_inertia_z = round(row[11] * 10000, 2)
+            self.mom_inertia_y = round(row[12] * 10000, 2)
+            self.rad_of_gy_z = round(row[13] * 10, 2)
+            self.rad_of_gy_y = round(row[14] * 10, 2)
+            self.elast_sec_mod_z = round(row[15] * 1000, 2)
+            self.elast_sec_mod_y = round(row[16] * 1000, 2)
+            self.plast_sec_mod_z = round(row[17], 2)
+            from .Section_Properties_Calculator import I_sectional_Properties
+            if self.plast_sec_mod_z is None:  # Todo: add in database
+                self.plast_sec_mod_z = round(I_sectional_Properties().calc_PlasticModulusZpz(self.depth, self.flange_width,
+                                                                                             self.web_thickness,
+                                                                                             self.flange_thickness) * 1000,
+                                             2)
+            else:
+                self.plast_sec_mod_z = round(row[17] * 1000, 2)
 
-        self.plast_sec_mod_y = round(row[18] * 1000, 2)
-        if self.plast_sec_mod_y is None:  # Todo: add in database
-            self.plast_sec_mod_y = round(I_sectional_Properties().calc_PlasticModulusZpy(self.depth, self.flange_width,
-                                                                                         self.web_thickness,
-                                                                                         self.flange_thickness) * 1000,
-                                         2)
-        else:
             self.plast_sec_mod_y = round(row[18] * 1000, 2)
+            if self.plast_sec_mod_y is None:  # Todo: add in database
+                self.plast_sec_mod_y = round(I_sectional_Properties().calc_PlasticModulusZpy(self.depth, self.flange_width,
+                                                                                             self.web_thickness,
+                                                                                             self.flange_thickness) * 1000,
+                                             2)
+            else:
+                self.plast_sec_mod_y = round(row[18] * 1000, 2)
 
-        self.It = round(I_sectional_Properties().calc_TorsionConstantIt(self.depth, self.flange_width,
-                                                                    self.web_thickness,
-                                                                    self.flange_thickness) * 10 ** 4, 2) \
-            if row[19] is None else round(row[19] * 10 ** 4, 2)
-        self.Iw = I_sectional_Properties().calc_WarpingConstantIw(self.depth, self.flange_width,
-                                                              self.web_thickness, self.flange_thickness) * 10 ** 6 \
-            if row[20] is None else round(row[20] * 10 ** 6, 2)
-        self.source = row[21]
-        self.type = 'Rolled' if row[22] is None else row[22]
-
+            self.It = round(I_sectional_Properties().calc_TorsionConstantIt(self.depth, self.flange_width,
+                                                                        self.web_thickness,
+                                                                        self.flange_thickness) * 10 ** 4, 2) \
+                if row[19] is None else round(row[19] * 10 ** 4, 2)
+            self.Iw = I_sectional_Properties().calc_WarpingConstantIw(self.depth, self.flange_width,
+                                                                  self.web_thickness, self.flange_thickness) * 10 ** 6 \
+                if row[20] is None else round(row[20] * 10 ** 6, 2)
+            self.source = row[21]
+            self.type = 'Rolled' if row[22] is None else row[22]
+        except Exception as e:
+            conn.close()
+            raise ValueError(f"Error processing section data for '{designation}': {str(e)}")
+        
         conn.close()
 
     def tension_member_yielding(self, A_g, F_y):

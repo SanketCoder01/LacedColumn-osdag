@@ -65,6 +65,7 @@ from ..get_DPI_scale import scale,height,width
 from ..cad.cad3dconnection import cadconnection
 from pynput.mouse import Button, Controller
 from osdag.gui.UI_DESIGN_PREFERENCE import Ui_Form
+import sqlite3
 
 class MyTutorials(QDialog):
     def __init__(self, parent=None):
@@ -850,7 +851,7 @@ class Window(QMainWindow):
         """
 
         new_list = main.customized_input(main)
-        updated_list = main.input_value_changed(main)
+        updated_list = main.input_value_changed()  # Remove main argument
         print(f'\n ui_template.py input_value_changed {updated_list} \n new_list {new_list}')
         data = {}
 
@@ -895,12 +896,90 @@ class Window(QMainWindow):
                             print(f"<class 'AttributeError'>: {d} \n {new_list}")
                             # Connect signals only if the corresponding elements exist in new_list
                             for i in range(len(new_list)):
-                                if new_list[i][0] in d:
-                                    d.get(new_list[i][0]).activated.connect(
-                                        lambda idx=i: self.popup(d.get(new_list[idx][0]), new_list, updated_list, data)
-                                    )
+                                widget = d.get(new_list[i][0])
+                                if widget is not None:
+                                    try:
+                                        # Store the widget reference in a closure to avoid lambda capture issues
+                                        def create_popup_handler(w, idx):
+                                            def handler():
+                                                try:
+                                                    # Get the current value from the widget
+                                                    current_value = w.currentText() if hasattr(w, 'currentText') else w.text()
+                                                    
+                                                    # Create a dialog to show database values
+                                                    dialog = QtWidgets.QDialog(self)
+                                                    dialog.setWindowTitle("Select Value")
+                                                    dialog.setModal(True)
+                                                    
+                                                    # Create layout
+                                                    layout = QtWidgets.QVBoxLayout(dialog)
+                                                    
+                                                    # Add a table to show database values
+                                                    table = QtWidgets.QTableWidget()
+                                                    table.setColumnCount(2)
+                                                    table.setHorizontalHeaderLabels(["Value", "Description"])
+                                                    
+                                                    # Connect to database and fetch values
+                                                    try:
+                                                        conn = sqlite3.connect('osdag.db')
+                                                        cursor = conn.cursor()
+                                                        cursor.execute("SELECT value, description FROM values_table WHERE type = ?", (new_list[idx][0],))
+                                                        values = cursor.fetchall()
+                                                        
+                                                        # Populate table
+                                                        table.setRowCount(len(values))
+                                                        for row, (value, desc) in enumerate(values):
+                                                            table.setItem(row, 0, QtWidgets.QTableWidgetItem(str(value)))
+                                                            table.setItem(row, 1, QtWidgets.QTableWidgetItem(str(desc)))
+                                                        
+                                                        conn.close()
+                                                    except Exception as db_error:
+                                                        print(f"Database error: {str(db_error)}")
+                                                        # Add default values if database fails
+                                                        table.setRowCount(1)
+                                                        table.setItem(0, 0, QtWidgets.QTableWidgetItem(current_value))
+                                                        table.setItem(0, 1, QtWidgets.QTableWidgetItem("Current Value"))
+                                                    
+                                                    layout.addWidget(table)
+                                                    
+                                                    # Add buttons
+                                                    button_box = QtWidgets.QDialogButtonBox(
+                                                        QtWidgets.QDialogButtonBox.Ok | QtWidgets.QDialogButtonBox.Cancel
+                                                    )
+                                                    button_box.accepted.connect(dialog.accept)
+                                                    button_box.rejected.connect(dialog.reject)
+                                                    layout.addWidget(button_box)
+                                                    
+                                                    # Show dialog
+                                                    if dialog.exec_() == QtWidgets.QDialog.Accepted:
+                                                        # Get selected value
+                                                        selected_items = table.selectedItems()
+                                                        if selected_items:
+                                                            selected_value = selected_items[0].text()
+                                                            # Update widget and design dictionary
+                                                            if hasattr(w, 'setCurrentText'):
+                                                                w.setCurrentText(selected_value)
+                                                            elif hasattr(w, 'setText'):
+                                                                w.setText(selected_value)
+                                                            # Update design dictionary
+                                                            self.popup(new_list[idx][0], [selected_value], data, main)
+                                                    
+                                                except Exception as e:
+                                                    print(f"Error in popup handler: {str(e)}")
+                                                    # Fallback to simple popup if dialog fails
+                                                    self.popup(new_list[idx][0], new_list, data, main)
+                                            
+                                            return handler
+                                        
+                                        # Connect the signal with the handler
+                                        widget.activated.connect(create_popup_handler(widget, i))
+                                        print(f"Successfully connected signal for widget: {new_list[i][0]}")
+                                    except Exception as e:
+                                        print(f"Error connecting signal for widget {new_list[i][0]}: {str(e)}")
+                                else:
+                                    print(f"[ERROR] Widget not found for key: {new_list[i][0]}")
                         except (IndexError, AttributeError) as e:
-                            print(f"Error connecting signals: {str(e)}")
+                            print(f"Error in widget connection loop: {str(e)}")
                             pass
 
                     # Change in Ui based on Connectivity selection
@@ -1714,9 +1793,9 @@ class Window(QMainWindow):
         return title_repeat
 
     def input_dp_connection(self, widget):
-        if isinstance(widget, QComboBox):
+        if isinstance(widget, QtWidgets.QComboBox):
             widget.currentIndexChanged.connect(self.clear_design_pref_dictionary)
-        elif isinstance(widget, QLineEdit):
+        elif isinstance(widget, QtWidgets.QLineEdit):
             widget.textChanged.connect(self.clear_design_pref_dictionary)
 
     def clear_design_pref_dictionary(self):
@@ -1858,11 +1937,24 @@ class Window(QMainWindow):
                 print(f"\n self.design_pref_inputs.keys() {self.design_pref_inputs.keys()}")
                 for key_name in input_list:
                     if input_source == 'Input Dock':
-                        design_dictionary.update({key_name: design_dictionary[input_dock_key]})
+                        try:
+                            if input_dock_key in design_dictionary:
+                                design_dictionary.update({key_name: design_dictionary[input_dock_key]})
+                            else:
+                                print(f"Warning: Key '{input_dock_key}' not found in design dictionary")
+                                # Set a default value or skip this update
+                                continue
+                        except Exception as e:
+                            print(f"Error updating design dictionary for key '{key_name}': {str(e)}")
+                            continue
                     else:
-                        val = main.get_values_for_design_pref(key_name, design_dictionary)  # Remove the extra main parameter
-                        if val is not None:
-                            design_dictionary.update({key_name: val})
+                        try:
+                            val = main.get_values_for_design_pref(key_name, design_dictionary)
+                            if val is not None:
+                                design_dictionary.update({key_name: val})
+                        except Exception as e:
+                            print(f"Error getting design preference value for key '{key_name}': {str(e)}")
+                            continue
 
             for dp_key in self.design_pref_inputs.keys():
                 design_dictionary[dp_key] = self.design_pref_inputs[dp_key]
@@ -2673,40 +2765,45 @@ class Window(QMainWindow):
                 continue
             arg_list = []
             for key_name in key_list:
-                # if object_name != key.objectName():
-                #     continue
-                key = tab.findChild(QtWidgets.QWidget, key_name)
-                if isinstance(key, QtWidgets.QComboBox):
-                    arg_list.append(key.currentText())
-                elif isinstance(key, QtWidgets.QLineEdit):
-                    arg_list.append(key.text())
+                widget = tab.findChild(QtWidgets.QWidget, key_name)
+                if widget is None:
+                    continue
+                if isinstance(widget, QtWidgets.QComboBox):
+                    arg_list.append(widget.currentText())
+                elif isinstance(widget, QtWidgets.QLineEdit):
+                    arg_list.append(widget.text())
+
+            if not arg_list:
+                continue
 
             arg_list.append(self.input_dock_inputs)
             arg_list.append(main.design_button_status)
-            # try:
-            #     tab1 = self.designPrefDialog.ui.tabWidget.findChild(QtWidgets.QWidget, tab_name)
-            #     key1 = tab.findChild(QtWidgets.QWidget, KEY_SECSIZE_SELECTED)
-            #     value1 = key1.text()
-            #     arg_list.append({KEY_SECSIZE_SELECTED: value1})
-            # except:
-            #     pass
-            val = f(arg_list)
+            
+            try:
+                val = f(*arg_list)  # Unpack arguments when calling the function
+            except Exception as e:
+                print(f"Error calling function: {e}")
+                continue
 
             for k2_key_name in k2_key_list:
-                # print(k2_key_name)
                 k2 = tab.findChild(QtWidgets.QWidget, k2_key_name)
+                if k2 is None:
+                    continue
+                    
                 if isinstance(k2, QtWidgets.QComboBox):
-                    if k2_key_name in val.keys():
+                    if k2_key_name in val:
                         k2.clear()
                         for values in val[k2_key_name]:
                             k2.addItem(str(values))
-                if isinstance(k2, QtWidgets.QLineEdit):
-                    k2.setText(str(val[k2_key_name]))
-                if isinstance(k2, QtWidgets.QLabel):
-                    pixmap1 = QPixmap(val[k2_key_name])
-                    k2.setPixmap(pixmap1)
+                elif isinstance(k2, QtWidgets.QLineEdit):
+                    if k2_key_name in val:
+                        k2.setText(str(val[k2_key_name]))
+                elif isinstance(k2, QtWidgets.QLabel):
+                    if k2_key_name in val:
+                        pixmap1 = QPixmap(val[k2_key_name])
+                        k2.setPixmap(pixmap1)
 
-            if typ == TYPE_OVERWRITE_VALIDATION and not val["Validation"][0]:
+            if typ == TYPE_OVERWRITE_VALIDATION and not val.get("Validation", [True, ""])[0]:
                 QMessageBox.warning(tab, "Warning", val["Validation"][1])
 
     def refresh_section_connect(self, add_button, prev, key_name, key_type, tab_key, arg,data):

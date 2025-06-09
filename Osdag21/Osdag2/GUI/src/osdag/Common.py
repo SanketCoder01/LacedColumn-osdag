@@ -652,6 +652,69 @@ TYPE_TITLE = "Title"
 TYPE_TEXTBOX = "TextBox"
 TYPE_COMBOBOX = "ComboBox"
 TYPE_COMBOBOX_CUSTOMIZED = "CustomizedComboBox"
+KEY_CONNECTION_TYPE = "connection_type"  # "weld" or "bolt"
+
+# For Weld
+KEY_WELD_SIZE = "weld_size"  # e.g., "6mm"
+KEY_WELD_MATERIAL_FU = "weld_fu"  # optional override
+
+# For Bolts
+KEY_BOLT_DIA = "bolt_dia"  # in mm
+KEY_BOLT_FU = "bolt_fu"
+KEY_BOLT_ANB = "Anb"
+KEY_BOLT_ASB = "Asb"
+KEY_BOLT_KB = "kb"
+KEY_BOLT_GAMMA_MB = "gamma_mb"
+KEY_BOLT_PLATE_THK = "plate_thickness"
+KEY_CHANNEL_SPACING = "channel_spacing"  # S, in mm
+KEY_GAP = "gap_between_channels"  # g, in mm
+KEY_TIE_PLATE_DEPTH = "tie_plate_depth"  # Dt, in mm
+KEY_LACING_RMIN = "lacing_rmin"  # optional, in mm
+KEY_IYY = 'LacedColumn.Iyy'
+KEY_DISP_IYY = 'Moment of Inertia Iyy'
+
+KEY_IZZ = 'LacedColumn.Izz'
+KEY_DISP_IZZ = 'Moment of Inertia Izz'
+
+KEY_RYY = 'LacedColumn.ryy'
+KEY_DISP_RYY = 'Radius of Gyration ryy'
+
+KEY_RZZ = 'LacedColumn.rzz'
+KEY_DISP_RZZ = 'Radius of Gyration rzz'
+
+KEY_ZYY = 'LacedColumn.Zyy'
+KEY_DISP_ZYY = 'Section Modulus Zyy'
+
+KEY_ZZZ = 'LacedColumn.Zzz'
+KEY_DISP_ZZZ = 'Section Modulus Zzz'
+KEY_LE = 'LacedColumn.Le'
+KEY_DISP_LE = 'Effective Length (Le)'
+
+KEY_CRITICAL_LOAD = 'LacedColumn.CriticalLoad'
+KEY_DISP_CRITICAL_LOAD = 'Critical Buckling Load'
+
+KEY_ACTUAL_STRESS = 'LacedColumn.ActualStress'
+KEY_DISP_ACTUAL_STRESS = 'Actual Compressive Stress'
+
+KEY_ALLOWABLE_STRESS = 'LacedColumn.AllowableStress'
+KEY_DISP_ALLOWABLE_STRESS = 'Allowable Compressive Stress'
+KEY_EFFECTIVE_LENGTH = 'LacedColumn.EffectiveLength'
+KEY_DISP_EFFECTIVE_LENGTH = 'Effective Length'
+KEY_WELD_CAPACITY = 'LacedColumn.WeldCapacity'
+KEY_DISP_WELD_CAPACITY = 'Weld Capacity (kN)'
+
+KEY_CONNECTION_EFFICIENCY = 'LacedColumn.ConnectionEfficiency'
+KEY_DISP_CONNECTION_EFFICIENCY = 'Connection Efficiency Factor'
+KEY_LACING_SLENDERNESS = 'LacedColumn.LacingSlenderness'
+KEY_DISP_LACING_SLENDERNESS = 'Slenderness'
+
+KEY_LACING_STRENGTH = 'LacedColumn.LacingStrength'
+KEY_DISP_LACING_STRENGTH = 'Design Strength'
+
+KEY_LACING_UTILIZATION = 'LacedColumn.LacingUtilization'
+KEY_DISP_LACING_UTILIZATION = 'Utilization'
+KEY_BOLT_GRADE = 'LacedColumn.BoltGrade'
+KEY_DISP_BOLT_GRADE = 'Bolt Grade'
 
 # ---------------------
 # VALIDATORS
@@ -689,8 +752,6 @@ KEY_LACEDCOL_BOLT_DIAMETER_OPTIONS = ['12', '16', '20']
 KEY_WELD_SIZE = 'LacedColumn.WeldSize'
 KEY_DISP_WELD_SIZE = 'Weld Size (mm) *'
 KEY_LACEDCOL_WELD_SIZE_OPTIONS = ['3', '5', '6', '8']
-KEY_LACEDCOL_MATERIAL = 'LacedColumn.Material'
-KEY_DISP_LACEDCOL_MATERIAL = 'Material'
 
 KEY_AXIAL_LOAD = 'LacedColumn.AxialLoad'
 KEY_DISP_AXIAL_LOAD = 'Axial Load (kN) *'
@@ -1238,6 +1299,9 @@ VALUES_IMG_TENSIONBOLTED_DF03 = [str(files("osdag.data.ResourceFiles.images").jo
 
 VALUES_IMG_BEAM = [str(files("osdag.data.ResourceFiles.images").joinpath("Slope_Beam.png")),str(files("osdag.data.ResourceFiles.images").joinpath("Parallel_Beam.png"))]
 VALUES_IMG_HOLLOWSECTION = [str(files("osdag.data.ResourceFiles.images").joinpath("SHS.png")),str(files("osdag.data.ResourceFiles.images").joinpath("RHS.png")),str(files("osdag.data.ResourceFiles.images").joinpath("CHS.png"))]
+
+# Define image paths for column sections (placeholder paths)
+VALUES_IMG_COLUMN = [str(files("osdag.data.ResourceFiles.images").joinpath("column_default.png"))]
 
 VALUES_BEAMSEC = connectdb("Beams")
 VALUES_SECBM = connectdb("Beams")

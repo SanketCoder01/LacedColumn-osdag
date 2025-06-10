@@ -905,6 +905,111 @@ KEY_DISP_Yield_Strength_Tension_field = 'Yield Strength of Tension field(f_v)($N
 KEY_DISP_AnchoragelengthTensionField= 'Anchorage length of Tension Field(s)(mm)'
 KEY_DISP_WidthTensionField= 'Width of Tension Field($w_{tf}$)'
 
+
+###################################
+# Battened Columns
+###################################
+KEY_DISP_COMPRESSION_BattenedColumn = 'Battened Columns'
+
+KEY_BATTENEDCOL_WELD_SIZE = "BattenedColumn.WeldSize"
+KEY_DISP_BATTENEDCOL = 'BattenedColumn'
+KEY_BATTENEDCOL_SEC_PROFILE = 'BattenedColumn.SectionProfile'
+KEY_DISP_BATTENEDCOL_SEC_PROFILE = 'Section Profile*'
+KEY_BATTENEDCOL_SEC_PROFILE_OPTIONS = ['2-channels back-to-back', '2-channels front-front', '2 Girders']
+KEY_BATTENEDCOL_SEC_SIZE = 'BattenedColumn.SectionSize'
+KEY_DISP_BATTENEDCOL_SEC_SIZE = 'Section Size*'
+KEY_BATTENEDCOL_SEC_SIZE_OPTIONS = ['User-defined', 'Optimized']
+# UI specific options for Section Profile and Size
+KEY_BATTENEDCOL_SEC_PROFILE_OPTIONS_UI = [
+    '2-channel Back-to-Back', '2-channel Front-to-Front', '2-Girders'
+]
+KEY_BATTENEDCOL_SEC_SIZE_OPTIONS_UI = ['User-defined', 'Auto-select']
+KEY_DISP_BATTENEDCOL_CUSTOM_SEC_SIZE = 'Custom Section Size (mm)*'
+# Battened Column Input and Design Preference Keys
+KEY_BATTENEDCOL_CUSTOM_SEC_SIZE = 'BattenedColumn.CustomSectionSize'
+# Spacing 
+KEY_BATTENEDCOL_SPACING = 'BattenedColumn.Spacing'
+KEY_DISP_BATTENEDCOL_SPACING = 'Spacing (mm)'
+# Material Grade
+KEY_BATTENEDCOL_MATERIALGRADE = 'BattenedColumn.MaterialGrade'
+KEY_BATTENEDCOL_MATERIAL = 'BattenedColumn.Material'
+KEY_DISP_BATTENEDCOL_MATERIAL = 'Material Grade*'
+KEY_MATERIAL = 'Material' 
+KEY_BATTENEDCOL_BOLT_TYPE = 'BattenedColumn.BoltType'
+KEY_DISP_BATTENEDCOL_LACING_PROFILE_TYPE = 'Lacing Profile Type'
+KEY_BATTENEDCOL_MATERIAL_OPTIONS = [
+    'E250', 'E275', 'E300', 'Custom'
+]
+
+
+# Unsupported Lengths
+KEY_BATTENEDCOL_UNSUPPORTED_LENGTH_YY = 'BattenedColumn.UnsupportedLengthYY'
+KEY_DISP_BATTENEDCOL_UNSUPPORTED_LENGTH_YY = 'Unsupported Length y-y axis (in mm)*'
+KEY_BATTENEDCOL_UNSUPPORTED_LENGTH_ZZ = 'BattenedColumn.UnsupportedLengthZZ'
+KEY_DISP_BATTENEDCOL_UNSUPPORTED_LENGTH_ZZ = 'Unsupported Length z-z axis (in mm)*'
+# End Conditions
+KEY_BATTENEDCOL_END_CONDITION_YY_1 = 'BattenedColumn.EndConditionYY.End1'
+KEY_DISP_BATTENEDCOL_END_CONDITION_YY_1 = 'End Condition y-y (End 1)*'
+KEY_BATTENEDCOL_END_CONDITION_YY_2 = 'BattenedColumn.EndConditionYY.End2'
+KEY_DISP_BATTENEDCOL_END_CONDITION_YY_2 = 'End Condition y-y (End 2)*'
+KEY_BATTENEDCOL_END_CONDITION_ZZ_1 = 'BattenedColumn.EndConditionZZ.End1'
+KEY_DISP_BATTENEDCOL_END_CONDITION_ZZ_1 = 'End Condition z-z (End 1)*'
+KEY_BATTENEDCOL_END_CONDITION_ZZ_2 = 'BattenedColumn.EndConditionZZ.End2'
+KEY_DISP_BATTENEDCOL_END_CONDITION_ZZ_2 = 'End Condition z-z (End 2)*'
+KEY_BATTENEDCOL_END_CONDITION_OPTIONS = ['Fixed', 'Pinned', 'Free']
+
+KEY_BATT_LYY = "BattenedColumn.Lyy"
+KEY_BATT_LZZ = "BattenedColumn.Lzz"
+
+# ---------------------
+# END CONDITION KEYS
+# ---------------------
+KEY_BATTENEDCOL_END_COND_YY = "BattenedColumn.EndConditionYY"
+KEY_BATTENEDCOL_END_COND_ZZ = "BattenedColumn.EndConditionZZ"
+
+# Lacing Profile
+KEY_BATTENEDCOL_LACING_PROFILE = 'BattenedColumn.LacingProfile'
+KEY_DISP_BATTENEDCOL_LACING_PROFILE = 'Lacing Profile*'
+KEY_BATTENEDCOL_LACING_PROFILE_OPTIONS = ['Angles', 'Channels', 'Flats']
+
+# Axial Load
+KEY_BATTENEDCOL_AXIAL_LOAD = 'BattenedColumn.AxialLoad'
+KEY_DISP_BATTENEDCOL_AXIAL_LOAD = 'Axial Load (kN)*'
+
+# Connection Type
+KEY_BATTENEDCOL_CONN_TYPE = 'BattenedColumn.ConnectionType'
+KEY_DISP_BATTENEDCOL_CONN_TYPE = 'Type of Connection*'
+KEY_BATTENEDCOL_CONN_TYPE_OPTIONS = ['Bolted', 'Welded']
+
+# Design Preference Keys
+KEY_BATTENEDCOL_EFFECTIVE_AREA = 'BattenedColumn.EffectiveArea'
+KEY_DISP_BATTENEDCOL_EFFECTIVE_AREA = 'Effective Area Parameter'
+
+KEY_BATTENEDCOL_ALLOWABLE_UR = 'BattenedColumn.AllowableUR'
+KEY_DISP_BATTENEDCOL_ALLOWABLE_UR = 'Allowable Utilization Ratio*'
+
+KEY_BATTENEDCOL_BATTEN_PROFILE = 'BattenedColumn.BattenProfile'
+KEY_DISP_BATTENEDCOL_BATTEN_PROFILE = 'Battening Profile Section'
+KEY_BATTENEDCOL_BATTEN_PROFILE_OPTIONS = ['ISA 40x40x5', 'ISMC 75', 'ISF 100x8']
+# UI specific options for Battening Profile
+KEY_BATTENEDCOL_BATTEN_PROFILE_OPTIONS_UI = ['Angle', 'Channel', 'Flat']
+
+KEY_BATTENEDCOL_BOLT_DIAMETER = 'BattenedColumn.BoltDiameter'
+KEY_DISP_BATTENEDCOL_BOLT_DIAMETER = 'Bolt Diameter'
+KEY_BATTENEDCOL_BOLT_DIAMETER_OPTIONS = ['16mm', '18mm', '20mm', '22mm']
+
+KEY_DISP_BATTENEDCOL_WELD_SIZE = 'Weld Size*'
+KEY_BATTENEDCOL_WELD_SIZE_OPTIONS = ['4mm', '5mm', '6mm', '8mm']
+
+# UI-specific lists for Battened Column design preferences
+KEY_BATTENEDCOL_EFFECTIVE_AREA_OPTIONS = ['1.0', '0.9', '0.8', '0.7', '0.6', '0.5', '0.4', '0.3', '0.2', '0.1']
+KEY_BATTENEDCOL_ALLOWABLE_UR_OPTIONS = ['1.0', '0.95', '0.9', '0.85']
+KEY_BATTENEDCOL_WELD_SIZE_OPTIONS_UI = ['5mm', '6mm', '8mm']
+KEY_BATTENEDCOL_BOLT_DIAMETER_OPTIONS_UI = ['16mm', '20mm', '24mm']
+KEY_BATTENEDCOL_BOLT_TYPE_OPTIONS = ['Bearing', 'Pretensioned']
+KEY_DISP_BATTENEDCOL_BOLT_TYPE = 'Bolt Type'
+
+
 ###################################
 # Plate Girder
 ###################################

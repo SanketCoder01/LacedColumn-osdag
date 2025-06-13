@@ -932,87 +932,82 @@ class LacedColumn(Member):
         return spacing
 
     def output_values(self, flag):
+        """
+        Returns list of tuples to be displayed in the UI (Output Dock)
+        Format: (key, display_key, type, value, required)
+        """
         out_list = []
 
-        # SECTION & MATERIAL
-        out_list.append((None, "Section and Material", TYPE_TITLE, None, True))
-        out_list.append((KEY_SECSIZE, "Main Column Section", TYPE_TEXTBOX, 
-                        self.section if flag else '', True))
-        out_list.append((KEY_LACEDCOL_MATERIAL, "Material Grade", TYPE_TEXTBOX, 
-                        self.material['grade'] if flag else '', True))
-        out_list.append((KEY_LACEDCOL_EFFECTIVE_AREA, "Effective Area (mm²)", TYPE_TEXTBOX, 
-                        f"{self.area:.2f}" if flag and self.area else '', True))
-        out_list.append((KEY_EFFECTIVE_AREA_PARAM, "Effective Area Factor", TYPE_TEXTBOX, 
-                        f"{self.result.get('effective_area_factor', ''):.2f}" if flag and self.result.get('effective_area_factor') else '', True))
+        # Section and Material Details
+        out_list.append((None, "Section and Material Details", TYPE_TITLE, None, True))
+        out_list.append((KEY_SECSIZE, "Section Size", TYPE_TEXTBOX, self.section_size_1.designation if flag else '', True))
+        out_list.append((KEY_MATERIAL, "Material Grade", TYPE_TEXTBOX, self.material.get('grade', '') if flag else '', True))
 
-        # DESIGN PARAMETERS
-        out_list.append((None, "Design Parameters", TYPE_TITLE, None, True))
-        out_list.append((KEY_OUT_SLENDERNESS, "Slenderness Ratio", TYPE_TEXTBOX, 
-                        f"{self.result.get('slenderness', ''):.2f}" if flag and self.result.get('slenderness') else '', True))
-        out_list.append((KEY_OUT_DESIGN_STRENGTH, "Design Compressive Strength (kN)", TYPE_TEXTBOX, 
-                        f"{self.result.get('design_strength', ''):.2f}" if flag and self.result.get('design_strength') else '', True))
-        out_list.append((KEY_UTILIZATION_RATIO, KEY_DISP_UTILIZATION_RATIO, TYPE_TEXTBOX, 
-                        f"{self.utilization_ratio:.3f}" if flag and self.utilization_ratio else '', True))
-        out_list.append((KEY_ALLOWED_UTILIZATION, "Allowed Utilization Ratio", TYPE_TEXTBOX, 
-                        self.allowed_utilization if flag else '1.0', True))
+        # Effective Lengths
+        out_list.append((None, "Effective Lengths", TYPE_TITLE, None, True))
+        out_list.append((KEY_EFF_LEN_YY, "Effective Length (YY)", TYPE_TEXTBOX, 
+                        round(self.result.get('effective_length_yy', 0), 2) if flag else '', True))
+        out_list.append((KEY_EFF_LEN_ZZ, "Effective Length (ZZ)", TYPE_TEXTBOX, 
+                        round(self.result.get('effective_length_zz', 0), 2) if flag else '', True))
 
-        # WELDING DETAILS
-        out_list.append((None, "Welding Details", TYPE_TITLE, None, True))
-        out_list.append((KEY_WELD_SIZE, "Weld Size (mm)", TYPE_TEXTBOX, 
-                        self.weld_size if flag else '', True))
-        out_list.append((KEY_WELD_TYPE, "Weld Type", TYPE_TEXTBOX, 
-                        self.weld_type if flag else '', True))
-        out_list.append((KEY_WELD_STRENGTH, "Weld Strength (kN)", TYPE_TEXTBOX, 
-                        f"{self.weld_strength:.2f}" if flag and self.weld_strength else '', True))
-        weld_length = self.result.get('weld_length_required')
-        out_list.append((KEY_WELD_LENGTH, "Required Weld Length (mm)", TYPE_TEXTBOX, 
-                        f"{weld_length:.2f}" if flag and weld_length is not None else '', True))
+        # End Conditions
+        out_list.append((None, "End Conditions", TYPE_TITLE, None, True))
+        out_list.append((KEY_END_COND_YY_1, "End Condition YY-1", TYPE_TEXTBOX, 
+                        self.result.get('end_condition_yy_1', '') if flag else '', True))
+        out_list.append((KEY_END_COND_YY_2, "End Condition YY-2", TYPE_TEXTBOX, 
+                        self.result.get('end_condition_yy_2', '') if flag else '', True))
+        out_list.append((KEY_END_COND_ZZ_1, "End Condition ZZ-1", TYPE_TEXTBOX, 
+                        self.result.get('end_condition_zz_1', '') if flag else '', True))
+        out_list.append((KEY_END_COND_ZZ_2, "End Condition ZZ-2", TYPE_TEXTBOX, 
+                        self.result.get('end_condition_zz_2', '') if flag else '', True))
 
-        # LACING DETAILS
-        out_list.append((None, "Lacing Details", TYPE_TITLE, None, True))
-        out_list.append((KEY_LACING_TYPE, "Lacing Pattern", TYPE_TEXTBOX, 
-                        self.lacing_type if flag else '', True))
-        out_list.append((KEY_LACING_SECTION, "Lacing Section", TYPE_TEXTBOX, 
-                        self.lacing_section if flag else '', True))
-        out_list.append((KEY_LACING_INCL_ANGLE, "Inclination Angle (°)", TYPE_TEXTBOX, 
-                        f"{self.lacing_incl_angle:.2f}" if flag and self.lacing_incl_angle else '', True))
-        out_list.append((KEY_LACING_SPACING, "Lacing Spacing (mm)", TYPE_TEXTBOX, 
-                        f"{self.result.get('L0', ''):.2f}" if flag and self.result.get('L0') else '', True))
-        out_list.append((KEY_LACING_FORCE, "Lacing Force (kN)", TYPE_TEXTBOX, 
-                        f"{self.result.get('Fcl', ''):.2f}" if flag and self.result.get('Fcl') else '', True))
+        # Slenderness Ratios
+        out_list.append((None, "Slenderness Ratios", TYPE_TITLE, None, True))
+        out_list.append((KEY_SLENDER_YY, "Slenderness Ratio (YY)", TYPE_TEXTBOX, 
+                        round(self.result.get('slenderness_yy', 0), 2) if flag else '', True))
+        out_list.append((KEY_SLENDER_ZZ, "Slenderness Ratio (ZZ)", TYPE_TEXTBOX, 
+                        round(self.result.get('slenderness_zz', 0), 2) if flag else '', True))
 
-        # TIE PLATE DETAILS
+        # Design Values
+        out_list.append((None, "Design Values", TYPE_TITLE, None, True))
+        out_list.append((KEY_FCD, "Design Compressive Stress (fcd)", TYPE_TEXTBOX, 
+                        round(self.result.get('fcd', 0), 2) if flag else '', True))
+        out_list.append((KEY_DESIGN_COMPRESSIVE, "Design Compressive Strength", TYPE_TEXTBOX, 
+                        round(self.result.get('design_compressive_strength', 0), 2) if flag else '', True))
+
+        # Channel Spacing
+        out_list.append((None, "Channel Spacing", TYPE_TITLE, None, True))
+        out_list.append((KEY_CHANNEL_SPACING, "Spacing Between Channels", TYPE_TEXTBOX, 
+                        round(self.result.get('channel_spacing', 0), 2) if flag else '', True))
+
+        # Tie Plate Details
         out_list.append((None, "Tie Plate Details", TYPE_TITLE, None, True))
-        out_list.append((KEY_TIE_PLATE_D, "Depth (mm)", TYPE_TEXTBOX, 
-                        f"{self.result.get('tie_plate_D', ''):.2f}" if flag and self.result.get('tie_plate_D') else '', True))
-        out_list.append((KEY_TIE_PLATE_L, "Length (mm)", TYPE_TEXTBOX, 
-                        f"{self.result.get('tie_plate_L', ''):.2f}" if flag and self.result.get('tie_plate_L') else '', True))
-        out_list.append((KEY_TIE_PLATE_T, "Thickness (mm)", TYPE_TEXTBOX, 
-                        f"{self.result.get('tie_plate_t', ''):.2f}" if flag and self.result.get('tie_plate_t') else '', True))
+        out_list.append((KEY_TIE_PLATE_D, "Overall Depth (D)", TYPE_TEXTBOX, 
+                        round(self.result.get('tie_plate_depth', 0), 2) if flag else '', True))
+        out_list.append((KEY_TIE_PLATE_T, "Thickness (t)", TYPE_TEXTBOX, 
+                        round(self.result.get('tie_plate_thickness', 0), 2) if flag else '', True))
+        out_list.append((KEY_TIE_PLATE_L, "Length (L)", TYPE_TEXTBOX, 
+                        round(self.result.get('tie_plate_length', 0), 2) if flag else '', True))
 
-        # LATERAL TORSIONAL BUCKLING DETAILS
-        out_list.append((None, KEY_DISP_LTB, TYPE_TITLE, None, False))
+        # Lacing Details
+        out_list.append((None, "Lacing Details", TYPE_TITLE, None, True))
+        out_list.append((KEY_LACING_SPACING, "Lacing Spacing", TYPE_TEXTBOX, 
+                        round(self.result.get('lacing_spacing', 0), 2) if flag else '', True))
+        out_list.append((KEY_LACING_ANGLE, "Lacing Angle", TYPE_TEXTBOX, 
+                        round(self.result.get('lacing_angle', 0), 2) if flag else '', True))
+        out_list.append((KEY_LACING_FORCE, "Force on Lacing", TYPE_TEXTBOX, 
+                        round(self.result.get('lacing_force', 0), 2) if flag else '', True))
+        out_list.append((KEY_LACING_SECTION_DIM, "Lacing Section Dimensions", TYPE_TEXTBOX, 
+                        self.result.get('lacing_section_dim', '') if flag else '', True))
 
-        # LTB Parameters
-        out_list.append((KEY_T_constatnt, KEY_DISP_T_constatnt, TYPE_TEXTBOX,
-                        self.result_tc if flag else '', False))
-        out_list.append((KEY_W_constatnt, KEY_DISP_W_constatnt, TYPE_TEXTBOX, 
-                        self.result_wc if flag else '', False))
-        out_list.append((KEY_IMPERFECTION_FACTOR_LTB, KEY_DISP_IMPERFECTION_FACTOR, TYPE_TEXTBOX, 
-                        self.result_IF_lt if flag else '', False))
-        out_list.append((KEY_SR_FACTOR_LTB, KEY_DISP_SR_FACTOR, TYPE_TEXTBOX, 
-                        self.result_srf_lt if flag else '', False))
-        out_list.append((KEY_NON_DIM_ESR_LTB, KEY_DISP_NON_DIM_ESR, TYPE_TEXTBOX, 
-                        self.result_nd_esr_lt if flag else '', False))
-        out_list.append((KEY_DESIGN_STRENGTH_COMPRESSION, KEY_DISP_COMP_STRESS, TYPE_TEXTBOX,
-                        self.result_fcd__lt if flag else '', False))
-        out_list.append((KEY_Elastic_CM, KEY_DISP_Elastic_CM, TYPE_TEXTBOX, 
-                        self.result_mcr if flag else '', False))
-
-        # DESIGN SUMMARY
-        out_list.append((None, "Design Summary", TYPE_TITLE, None, True))
-        out_list.append((KEY_DESIGN_STATUS, "Design Status", TYPE_TEXTBOX, 
-                        "Safe" if self.design_status else "Unsafe" if flag else '', True))
+        # Connection Details
+        out_list.append((None, "Connection Details", TYPE_TITLE, None, True))
+        if self.weld_type == 'Welded':
+            out_list.append((KEY_WELD_LENGTH, "Required Weld Length", TYPE_TEXTBOX, 
+                           round(self.result.get('weld_length', 0), 2) if flag else '', True))
+        else:
+            out_list.append((KEY_BOLT_COUNT, "Number of Bolts Required", TYPE_TEXTBOX, 
+                           self.result.get('bolt_count', 0) if flag else '', True))
 
         return out_list
 
@@ -2069,9 +2064,3 @@ def show_customized_section_dialog(self):
             # Example: self.section_designation = selected
             return selected
     return None
-
-# In your fn_profile_section and design preference handler, call this when 'Customized' is selected:
-# Example usage:
-# if selected_profile == "Customized":
-#     self.show_customized_section_dialog()
-#     return

@@ -1,37 +1,30 @@
+from typing import Dict, Any, Optional, List, Tuple, Callable
 from ..member import Member
 from ...Common import *
 from ...utils.common.component import ISection, Material
 from ...utils.common.common_calculation import *
 from ...utils.common.load import Load
 from ..tension_member import *
-from ...utils.common.Section_Properties_Calculator import BBAngle_Properties
 import math
-import numpy as np
-from ...utils.common import is800_2007
 from ...utils.common.component import *
 import logging
-from ..connection.moment_connection import MomentConnection
 from ...utils.common.material import *
 from ...Report_functions import *
 from ...design_report.reportGenerator_latex import CreateLatex
-from pylatex.utils import NoEscape
-from ...Common import TYPE_TAB_4, TYPE_TAB_5 
-from PyQt5.QtWidgets import QLineEdit, QMainWindow, QMessageBox
+from PyQt5.QtWidgets import QLineEdit, QMessageBox
 from PyQt5.QtCore import Qt
-from PyQt5.QtGui import QValidator, QDoubleValidator
-from ...gui.ui_template import Window
-from PyQt5.QtWidgets import QComboBox
-from PyQt5.QtWidgets import QDialog, QVBoxLayout, QLabel, QPushButton, QFormLayout
+from PyQt5.QtWidgets import QDialog, QVBoxLayout, QFormLayout, QTableWidget, QTableWidgetItem, QListWidget, QPushButton, QLabel, QHBoxLayout
 from PyQt5.QtWidgets import QDialogButtonBox
+from PyQt5.QtWidgets import QComboBox
 import sqlite3
-from functools import partial
 import os
+from ...utils.common.is800_2007 import IS800_2007
+from ...design_type.compression_member.LacedColumnDesign import LacedColumnDesign
+from PyQt5.QtGui import QDoubleValidator
 
-# NEW: Import calculation class
-from .LacedColumnDesign import LacedColumnDesign
-
-from osdag.Common import PATH_TO_DATABASE
-
+# Get the absolute path to the database file
+DB_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))),
+                      "data", "ResourceFiles", "Database", "Intg_osdag.sql")
 
 class MaterialDialog(QDialog):
     def __init__(self, parent=None):
@@ -81,7 +74,7 @@ class MaterialDialog(QDialog):
 
 class LacedColumn(Member):
     def __init__(self):
-        super(LacedColumn, self).__init__()
+        super().__init__()
         self.design_status = False
         self.design_pref_dialog = None
         self.logger = None
@@ -94,6 +87,26 @@ class LacedColumn(Member):
             KEY_DISP_LACEDCOL_EFFECTIVE_AREA: "1.0",
             KEY_DISP_LACEDCOL_ALLOWABLE_UR: "1.0"
         }
+
+        self.conn = None
+        self.result: Dict[str, Any] = {}
+        self.material: Optional[Dict[str, Any]] = None
+        self.section_size_1: Optional[Dict[str, Any]] = None
+        self.weld_type: Optional[str] = None
+        self.conn: Optional[sqlite3.Connection] = None
+        self.unsupported_length_yy: float = 0.0
+        self.unsupported_length_zz: float = 0.0
+        self.end_condition_yy: str = ""
+        self.end_condition_zz: str = ""
+        self.lacing_pattern: str = ""
+        self.axial_load: float = 0.0
+        self.initialize_db_connection()
+        self.initialize_result_dict()
+        
+        # Initialize validators
+        self.double_validator = QDoubleValidator()
+        self.double_validator.setBottom(0.0)  # Set minimum value to 0
+        self.double_validator.setDecimals(2)  # Allow 2 decimal places
 
     def customized_input(self, ui_self=None):
         """
@@ -246,9 +259,6 @@ class LacedColumn(Member):
         # Laced column specific
         t3 = (KEY_DISP_LACEDCOL, TYPE_COMBOBOX, [KEY_LACEDCOL_MATERIAL])
         design_input.append(t3)
-
-        t4 = (KEY_DISP_LACEDCOL, TYPE_TEXTBOX, [KEY_LACEDCOL_FU, KEY_LACEDCOL_FY])
-        design_input.append(t4)
 
         return design_input
 

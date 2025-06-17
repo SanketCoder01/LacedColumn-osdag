@@ -16,15 +16,13 @@ from PyQt5.QtCore import Qt
 from PyQt5.QtWidgets import QDialog, QVBoxLayout, QFormLayout, QTableWidget, QTableWidgetItem, QListWidget, QPushButton, QLabel, QHBoxLayout
 from PyQt5.QtWidgets import QDialogButtonBox
 from PyQt5.QtWidgets import QComboBox
-import sqlite3
-import os
-from ...utils.common.is800_2007 import IS800_2007
-from ...design_type.compression_member.LacedColumnDesign import LacedColumnDesign
+from PyQt5.QtWidgets import QDialogButtonBox
 from PyQt5.QtGui import QDoubleValidator
+import sqlite3
+from osdag.design_type.compression_member.LacedColumnDesign import LacedColumnDesign
+from osdag.utils.common.component import Bolt
 
-# Get the absolute path to the database file
-DB_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))),
-                      "data", "ResourceFiles", "Database", "Intg_osdag.sql")
+PATH_TO_DATABASE = r"C:\Users\SANKET\Downloads\LacedColumn-osdag-main\LacedColumn-osdag-main\Osdag21\Osdag2\GUI\src\osdag\data\ResourceFiles\Database\Intg_osdag.sqlite"
 
 class MaterialDialog(QDialog):
     def __init__(self, parent=None):
@@ -77,8 +75,14 @@ class LacedColumn(Member):
         super().__init__()
         self.design_status = False
         self.design_pref_dialog = None
-        self.logger = None
-        self.section_designation = None
+        self.logger = logging.getLogger('Osdag')
+        self.logger.setLevel(logging.DEBUG)
+        handler = logging.StreamHandler()
+        formatter = logging.Formatter(fmt='%(asctime)s - %(name)s - %(levelname)s - %(message)s', datefmt='%Y-%m-%d %H:%M:%S')
+        handler.setFormatter(formatter)
+        self.logger.addHandler(handler)
+        handler = logging.FileHandler('logging_text.log')
+        self.logger.addHandler(handler)
         
         # Initialize design preferences with default values
         self.design_pref_dictionary = {
@@ -88,25 +92,97 @@ class LacedColumn(Member):
             KEY_DISP_LACEDCOL_ALLOWABLE_UR: "1.0"
         }
 
+        # Initialize database connection
         self.conn = None
-        self.result: Dict[str, Any] = {}
-        self.material: Optional[Dict[str, Any]] = None
-        self.section_size_1: Optional[Dict[str, Any]] = None
-        self.weld_type: Optional[str] = None
-        self.conn: Optional[sqlite3.Connection] = None
-        self.unsupported_length_yy: float = 0.0
-        self.unsupported_length_zz: float = 0.0
-        self.end_condition_yy: str = ""
-        self.end_condition_zz: str = ""
-        self.lacing_pattern: str = ""
-        self.axial_load: float = 0.0
+        self.material_data = {}
+        self.section_data = {}
+        self.section_designation = None
         self.initialize_db_connection()
-        self.initialize_result_dict()
+
+        # Initialize result dictionary and other attributes
+        self.result = {}
+        self.material = None
+        self.section_size_1 = None
+        self.weld_type = None
+        self.unsupported_length_yy = 0.0
+        self.unsupported_length_zz = 0.0
+        self.end_condition_yy = ""
+        self.end_condition_zz = ""
+        self.lacing_pattern = ""
+        self.axial_load = 0.0
+        self.utilization_ratio = 0
+        self.area = 0
+        self.epsilon = 1.0
+        self.fy = 0
+        self.section = None
+        self.weld_size = ''
+        self.weld_strength = 0
+        self.lacing_incl_angle = 0.0
+        self.lacing_section = ''
+        self.lacing_type = ''
+        self.allowed_utilization = ''
+        self.module = KEY_DISP_COMPRESSION_LacedColumn
+        self.mainmodule = 'Member'
+        
+        # Initialize output_title_fields
+        self.output_title_fields = {}
         
         # Initialize validators
         self.double_validator = QDoubleValidator()
-        self.double_validator.setBottom(0.0)  # Set minimum value to 0
-        self.double_validator.setDecimals(2)  # Allow 2 decimal places
+        self.double_validator.setNotation(QDoubleValidator.StandardNotation)
+        self.double_validator.setDecimals(2)
+        
+        # Initialize result dictionary
+        self.initialize_result_dict()
+
+        self.lace_pitch = 0.0  # Initialize lace_pitch attribute
+        self.result_tc = 0.0
+        self.result_wc = 0.0
+        self.result_IF_lt = 0.0
+        self.result_srf_lt = 0.0
+        self.result_nd_esr_lt = 0.0
+        self.result_fcd__lt = 0.0
+        self.result_mcr = 0.0
+
+        self.bolt = Bolt(grade=None, diameter=None, bolt_type="Bearing Bolt")
+
+        self.lacing_angle = 0.0  # Initialize lacing_angle attribute
+        self.effective_area_param = 0.0  # Initialize effective_area_param attribute
+
+        self.failed_design_dict = {}  # Initialize failed_design_dict attribute
+
+        # Connect the material combo box to the on_material_grade_selected method
+        self.material_combo.currentTextChanged.connect(self.on_material_grade_selected)
+
+    def initialize_result_dict(self):
+        """
+        Initialize the result dictionary with default values.
+        """
+        self.result = {
+            "design_safe": False,
+            "message": "",
+            "utilization": 0.0,
+            "effective_length_yy": 0.0,
+            "effective_length_zz": 0.0,
+            "end_condition_yy_1": "",
+            "end_condition_yy_2": "",
+            "end_condition_zz_1": "",
+            "end_condition_zz_2": "",
+            "slenderness_yy": 0.0,
+            "slenderness_zz": 0.0,
+            "fcd": 0.0,
+            "design_compressive_strength": 0.0,
+            "channel_spacing": 0.0,
+            "tie_plate_depth": 0.0,
+            "tie_plate_thickness": 0.0,
+            "tie_plate_length": 0.0,
+            "lacing_spacing": 0.0,
+            "lacing_angle": 0.0,
+            "lacing_force": 0.0,
+            "lacing_section_dim": "",
+            "weld_length": 0.0,
+            "bolt_count": 0
+        }
 
     def customized_input(self, ui_self=None):
         """
@@ -150,241 +226,6 @@ class LacedColumn(Member):
         """
         self.design_status = status
 
-    def __init__(self):
-        super(LacedColumn, self).__init__()
-        self.logger = logging.getLogger('Osdag')
-        self.logger.setLevel(logging.DEBUG)
-        handler = logging.StreamHandler()
-        formatter = logging.Formatter(fmt='%(asctime)s - %(name)s - %(levelname)s - %(message)s', datefmt='%Y-%m-%d %H:%M:%S')
-        handler.setFormatter(formatter)
-        self.logger.addHandler(handler)
-        handler = logging.FileHandler('logging_text.log')
-        self.logger.addHandler(handler)
-        self.design_status = False
-        self.result = {}
-        self.utilization_ratio = 0
-        self.area = 0
-        self.epsilon = 1.0
-        self.fy = 0
-        self.section = None
-        self.material = {}
-        self.weld_size = ''
-        self.weld_type = ''
-        self.weld_strength = 0
-        self.lacing_incl_angle = 0
-        self.lacing_section = ''
-        self.lacing_type = ''
-        self.allowed_utilization = ''
-        self.module = KEY_DISP_COMPRESSION_LacedColumn
-        self.mainmodule = 'Member'
-        
-        # Initialize output_title_fields
-        self.output_title_fields = {}
-        
-        # Initialize validators
-        self.double_validator = QDoubleValidator()
-        self.double_validator.setNotation(QDoubleValidator.StandardNotation)
-        self.double_validator.setDecimals(2)
-
-       ###################################
-    # design preference functions start
-    ###################################
-
-    def tab_list(self):
-        """Returns list of tabs for design preferences"""
-        tabs = []
-        
-        # Column Section tab
-        t1 = (KEY_DISP_COLSEC, TYPE_TAB_1, self.tab_section)
-        tabs.append(t1)
-        
-        # Weld Preferences tab
-        t2 = ("Weld Preferences", TYPE_TAB_4, self.all_weld_design_values)
-        tabs.append(t2)
-        
-        return tabs
-
-    def all_weld_design_values(self, *args):
-        return [
-            (KEY_DISP_LACEDCOL_LACING_PROFILE_TYPE, "Lacing Profile Type", TYPE_COMBOBOX, ["Angle", "Channel", "Flat"], True, 'No Validator'),
-            (KEY_DISP_LACEDCOL_LACING_PROFILE, "Lacing Profile Section", TYPE_COMBOBOX_CUSTOMIZED, self.get_lacing_profiles, True, 'No Validator'),
-            (KEY_DISP_LACEDCOL_EFFECTIVE_AREA, "Effective Area Parameter", TYPE_COMBOBOX, ["1.0", "0.9", "0.8", "0.7", "0.6", "0.5", "0.4", "0.3", "0.2", "0.1"], True, 'No Validator'),
-            (KEY_DISP_LACEDCOL_ALLOWABLE_UR, "Allowable Utilization Ratio", TYPE_COMBOBOX, ["1.0", "0.95", "0.9", "0.85"], True, 'No Validator'),
-            (KEY_DISP_LACEDCOL_BOLT_DIAMETER, "Bolt Diameter", TYPE_COMBOBOX, ["16mm", "20mm", "24mm", "27mm"], True, 'No Validator'),
-            (KEY_DISP_LACEDCOL_WELD_SIZE, "Weld Size", TYPE_COMBOBOX, ["4mm", "5mm", "6mm", "8mm"], True, 'No Validator')
-        ]
-
-    def tab_value_changed(self):
-        """
-        Returns list of tuples for tab value changes.
-        Format: (tab name, [input keys], [output keys], type, function)
-        """
-        change_tab = []
-
-        # Section material changes
-        # Material properties update
-        t1 = (KEY_DISP_COLSEC, [KEY_SEC_MATERIAL], [KEY_SEC_FU, KEY_SEC_FY], TYPE_TEXTBOX, self.get_fu_fy_I_section)
-        change_tab.append(t1)
-
-        # Section properties update
-        t2 = (KEY_DISP_COLSEC, ['Label_1', 'Label_2', 'Label_3', 'Label_4', 'Label_5'],
-              ['Label_11', 'Label_12', 'Label_13', 'Label_14', 'Label_15', 'Label_16', 'Label_17', 'Label_18',
-               'Label_19', 'Label_20', 'Label_21', 'Label_22', KEY_IMAGE], TYPE_TEXTBOX, self.get_I_sec_properties)
-        change_tab.append(t2)
-
-        # Source update
-        t3 = (KEY_DISP_COLSEC, [KEY_SECSIZE], [KEY_SOURCE], TYPE_TEXTBOX, self.change_source)
-        change_tab.append(t3)
-
-        return change_tab
-
-    def edit_tabs(self):
-        return []
-
-    def input_dictionary_design_pref(self):
-        """
-        Returns list of tuples for design preferences.
-        Format: (tab name, input widget type, [list of keys])
-        """
-        design_input = []
-
-        # Section profile and material
-        t1 = (KEY_DISP_COLSEC, TYPE_COMBOBOX, [KEY_SEC_MATERIAL])
-        design_input.append(t1)
-
-        # Section properties
-        t2 = (KEY_DISP_COLSEC, TYPE_TEXTBOX, [KEY_SEC_FU, KEY_SEC_FY])
-        design_input.append(t2)
-
-        # Laced column specific
-        t3 = (KEY_DISP_LACEDCOL, TYPE_COMBOBOX, [KEY_LACEDCOL_MATERIAL])
-        design_input.append(t3)
-
-        return design_input
-
-    def input_dictionary_without_design_pref(self):
-        """
-        Returns list of tuples for input dictionary without design preferences.
-        Format: [(key, [list of keys], source)]
-        """
-        design_input = []
-        
-        # Material input with safe defaults
-        t1 = (KEY_MATERIAL, [KEY_SEC_MATERIAL], 'Input Dock')
-        design_input.append(t1)
-
-        # Weld preferences with safe defaults
-        t2 = (None, [
-                KEY_DISP_LACEDCOL_LACING_PROFILE_TYPE,
-                KEY_DISP_LACEDCOL_LACING_PROFILE,
-                KEY_DISP_LACEDCOL_EFFECTIVE_AREA,
-                KEY_DISP_LACEDCOL_ALLOWABLE_UR,
-                KEY_DISP_LACEDCOL_BOLT_DIAMETER,
-                KEY_DISP_LACEDCOL_WELD_SIZE
-            ], '')
-        design_input.append(t2)
-        t2 = (KEY_SECSIZE, [KEY_SECSIZE], 'Input Dock')
-        design_input.append(t2)
-
-        # Column section preferences with safe defaults
-        t3 = (KEY_DISP_COLSEC, [
-            KEY_DISP_LACEDCOL_MATERIAL,
-            KEY_SEC_FU, 
-            KEY_SEC_FY
-        ], 'Input Dock')
-        design_input.append(t3)
-
-        return design_input
-
-    def get_values_for_design_pref(self, key, design_dictionary):
-        """
-        Returns default values for design preferences when not opened by user.
-        """
-        if not design_dictionary or design_dictionary.get(KEY_SECSIZE, 'Select Section') == 'Select Section' or \
-                design_dictionary.get(KEY_MATERIAL, 'Select Material') == 'Select Material':
-            fu = ''
-            fy = ''
-        else:
-            material = Material(design_dictionary[KEY_MATERIAL], 41)
-            fu = material.fu
-            fy = material.fy
-
-        val = {
-            KEY_SECSIZE: 'Select Section',  # Main section size key
-            KEY_DISP_LACEDCOL_SEC_SIZE: 'Select Section',  # Keep this for backward compatibility
-            KEY_DISP_LACEDCOL_LACING_PROFILE_TYPE: "Angle",
-            KEY_DISP_LACEDCOL_LACING_PROFILE: "ISA 40x40x5",
-            KEY_DISP_LACEDCOL_EFFECTIVE_AREA: "1.0",
-            KEY_DISP_LACEDCOL_ALLOWABLE_UR: "1.0",
-            KEY_DISP_LACEDCOL_BOLT_DIAMETER: "16mm",
-            KEY_DISP_LACEDCOL_WELD_SIZE: "5mm",
-            KEY_SEC_FU: fu,
-            KEY_SEC_FY: fy,
-            KEY_SEC_MATERIAL: design_dictionary.get(KEY_MATERIAL, 'Select Material'),
-            # Add defaults for any label keys that might be undefined
-            'Label_1': '',
-            'Label_2': '',
-            'Label_3': '',
-            'Label_4': '',
-            'Label_5': '',
-            'Label_11': '',
-            'Label_12': '',
-            'Label_13': '',
-            'Label_14': '',
-            'Label_15': '',
-            'Label_16': '',
-            'Label_17': '',
-            'Label_18': '',
-            'Label_19': '',
-            'Label_20': '',
-            'Label_21': '',
-            'Label_22': '',
-            'Label_HS_1': '',
-            'Label_HS_2': '',
-            'Label_HS_3': '',
-            'Label_HS_11': '',
-            'Label_HS_12': '',
-            'Label_HS_13': '',
-            'Label_HS_14': '',
-            'Label_HS_15': '',
-            'Label_HS_16': '',
-            'Label_HS_17': '',
-            'Label_HS_18': '',
-            'Label_HS_19': '',
-            'Label_HS_20': '',
-            'Label_HS_21': '',
-            'Label_HS_22': '',
-            'Label_CHS_1': '',
-            'Label_CHS_2': '',
-            'Label_CHS_3': '',
-            'Label_CHS_11': '',
-            'Label_CHS_12': '',
-            'Label_CHS_13': ''
-        }[key]
-
-        return val
-
-    def get_lacing_profiles(self, *args):
-        """
-        Returns lacing profile options based on selected lacing pattern.
-        """
-        if not args or not args[0]:
-            return connectdb('Angles', call_type="popup")
-
-        pattern = args[0]
-        if pattern == "Single Lacing":
-            return connectdb('Angles', call_type="popup")
-        elif pattern == "Double Lacing":
-            return connectdb('Angles', call_type="popup")
-        elif pattern == "Flat Bar":
-            return connectdb('Channels', call_type="popup")
-        else:
-            return []
-
-    ###################################
-    # design preference functions end
-    ###################################
-
     def set_osdaglogger(self, widget):
         """Function to set Logger for LacedColumn Module"""
         key = 'LacedColumn'
@@ -410,6 +251,7 @@ class LacedColumn(Member):
             
             self.logger = logger
         return logger
+
     def fn_torsion_warping(self):
         print( 'Inside fn_torsion_warping', self)
         if self[0] == Torsion_Restraint1:
@@ -491,21 +333,53 @@ class LacedColumn(Member):
             return False
 
     def run_design(self, design_dict):
+        """
+        Public method to be called by UI or automation to run full design.
+        """
         self.process_design(design_dict)
         return self.design_status
 
     def generate_latex_report(self):
+        """
+        Generates LaTeX report using the computed results.
+        Only if design status is OK.
+        """
         if not self.design_status:
             return "Design not safe. No report generated."
+
+        # Create report summary
+        report_summary = {
+            "ProfileSummary": {
+                "CompanyName": "Osdag",
+                "CompanyLogo": "",
+                "Group/TeamName": "Osdag Team",
+                "Designer": "Osdag Designer"
+            },
+            "ProjectTitle": "Laced Column Design",
+            "Subtitle": "Design Report",
+            "JobNumber": "",
+            "Client": "",
+            "does_design_exist": True
+        }
+
+        # Create UI object with results
+        ui_obj = {
+            "Section and Material Details": {
+                "Section Size": self.section_size_1.designation if self.section_size_1 else "",
+                "Material Grade": self.material.get('grade', '') if self.material else ""
+            },
+            "Design Results": {
+                "Utilization Ratio": f"{self.utilization_ratio:.2f}",
+                "Design Status": "Safe" if self.design_status else "Unsafe",
+                "Lacing Angle": f"{self.lacing_incl_angle}°",
+                "Required Weld Length": f"{self.result.get('weld_length_required', 'N/A')} mm"
+            }
+        }
+
+        # Generate report
         report = CreateLatex()
-        report.add_title("Laced Column Design Report")
-        report.add_section("Summary", [
-            f"Utilization Ratio: {self.utilization_ratio:.2f}",
-            f"Design Status: {'Safe' if self.design_status else 'Unsafe'}",
-            f"Lacing Angle: {self.lacing_incl_angle}°",
-            f"Required Weld Length: {self.result.get('weld_length_required', 'N/A')} mm"
-        ])
-        report.compile()
+        report.save_latex(ui_obj, self.design_status, report_summary, "laced_column_report", "", "", "", "LacedColumn")
+
         return "Report generation completed."
 
     def input_value_changed(self):
@@ -572,99 +446,122 @@ class LacedColumn(Member):
     def show_custom_section_dialog(self):
         """
         Shows a dialog with available sections from the database.
+        Avoids pop-up if ISection table is missing.
         """
         try:
             print("[DEBUG] Showing sections from database")
-            
-            # Create dialog
             dialog = QDialog()
             dialog.setWindowTitle("Available Sections")
             dialog.setMinimumWidth(400)
-            
-            # Create layout
             layout = QVBoxLayout()
-            
-            # Create table widget
             table = QTableWidget()
             table.setColumnCount(8)
             table.setHorizontalHeaderLabels([
                 "Designation", "Depth", "Flange Width", "Flange Thickness",
                 "Web Thickness", "Root Radius", "Toe Radius", "Flange Slope"
             ])
-            
-            try:
-                # Connect to database and fetch sections
-                conn = sqlite3.connect(PATH_TO_DATABASE)
-                c = conn.cursor()
-                c.execute('''SELECT Designation, Depth, FlangeWidth, FlangeThickness,
-                           WebThickness, RootRadius, ToeRadius, FlangeSlope FROM ISection''')
-                sections = c.fetchall()
+            # Get sections using connectdb
+            sections = connectdb('Columns', call_type="popup")
+            if not sections:
+                # Instead of pop-up, just return gracefully
+                print("[WARNING] No sections found in database or table missing.")
+                return None
+            # Check if ISection table exists
+            conn = sqlite3.connect(PATH_TO_DATABASE)
+            c = conn.cursor()
+            c.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='ISection';")
+            if not c.fetchone():
+                print("[WARNING] ISection table does not exist in the database.")
                 conn.close()
-                
-                # Populate table
-                table.setRowCount(len(sections))
-                for i, section in enumerate(sections):
-                    for j, value in enumerate(section):
+                return None
+            # Populate table
+            table.setRowCount(len(sections))
+            for i, section in enumerate(sections):
+                c.execute('''SELECT Designation, Depth, FlangeWidth, FlangeThickness,
+                            WebThickness, RootRadius, ToeRadius, FlangeSlope 
+                            FROM ISection WHERE Designation = ?''', (section,))
+                details = c.fetchone()
+                if details:
+                    for j, value in enumerate(details):
                         item = QTableWidgetItem(str(value))
                         table.setItem(i, j, item)
-                
-                # Add table to layout
-                layout.addWidget(table)
-                
-                # Add buttons
-                button_box = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
-                button_box.accepted.connect(dialog.accept)
-                button_box.rejected.connect(dialog.reject)
-                layout.addWidget(button_box)
-                
-                dialog.setLayout(layout)
-                
-                # Show dialog
-                if dialog.exec_() == QDialog.Accepted:
-                    # Get selected section
-                    selected_items = table.selectedItems()
-                    if selected_items:
-                        row = selected_items[0].row()
-                        self.section_designation = table.item(row, 0).text()
-                        return self.section_designation
-                    
-            except sqlite3.Error as e:
-                QMessageBox.critical(dialog, "Database Error", f"Failed to fetch sections: {str(e)}")
-                
+            conn.close()
+            layout.addWidget(table)
+            button_box = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+            button_box.accepted.connect(dialog.accept)
+            button_box.rejected.connect(dialog.reject)
+            layout.addWidget(button_box)
+            dialog.setLayout(layout)
+            if dialog.exec_() == QDialog.Accepted:
+                selected_items = table.selectedItems()
+                if selected_items:
+                    row = selected_items[0].row()
+                    self.section_designation = table.item(row, 0).text()
+                    return self.section_designation
         except Exception as e:
             if self.logger:
                 self.logger.error(f"Error in show_custom_section_dialog: {str(e)}")
-            QMessageBox.critical(None, "Error", f"Failed to show sections dialog: {str(e)}")
+            # Do not show a pop-up, just log and return
+            print(f"[ERROR] Failed to show sections dialog: {str(e)}")
+            return None
 
-    def get_section_sizes(self, design_dictionary, key):
+    def get_section_sizes(self, *args):
         """
-        Get available section sizes based on profile type
+        Returns available section sizes based on the selected profile.
+        Fetches sections directly from the database tables.
         """
-        try:
-            profile = design_dictionary.get(KEY_SEC_PROFILE, '')
-            if not profile:
-                return []
+        if not args or not args[0]:
+            return connectdb('Columns', call_type="popup")
+        profile = args[0]
+        if profile in ["I-section", "Columns"]:
+            # Get sections from Columns table
+            sections = connectdb('Columns', call_type="popup")
+            print(f"DEBUG: Available I-sections: {sections}")
+            return sections
+        elif profile == "Channels":
+            return connectdb('Channels', call_type="popup")
+        elif profile == "Angles":
+            return connectdb('Angles', call_type="popup")
+        elif profile == "RHS":
+            return connectdb('RHS', call_type="popup")
+        elif profile == "SHS":
+            return connectdb('SHS', call_type="popup")
+        elif profile == "CHS":
+            return connectdb('CHS', call_type="popup")
+        elif profile == "Custom":
+            return ["Custom"]
+        else:
+            return ["Custom"]
 
-            if profile == 'I-section':
-                return self.get_I_section_sizes()
-            elif profile == 'RHS':
-                return self.get_RHS_section_sizes()
-            elif profile == 'SHS':
-                return self.get_SHS_section_sizes()
-            elif profile == 'CHS':
-                return self.get_CHS_section_sizes()
-            else:
-                return []
-        except Exception as e:
-            if self.logger:
-                self.logger.error(f"Error getting section sizes: {str(e)}")
-            return []
+    def get_I_section_sizes(self):
+        """
+        Returns available I-section sizes from the database.
+        """
+        return connectdb('Columns', call_type="popup")
 
-    def get_end_conditions(self, design_dictionary, key):
+    def get_RHS_section_sizes(self):
         """
-        Get available end conditions
+        Returns available RHS section sizes from the database.
         """
-        return ['Fixed', 'Hinged', 'Free']
+        return connectdb('RHS', call_type="popup")
+
+    def get_SHS_section_sizes(self):
+        """
+        Returns available SHS section sizes from the database.
+        """
+        return connectdb('SHS', call_type="popup")
+
+    def get_CHS_section_sizes(self):
+        """
+        Returns available CHS section sizes from the database.
+        """
+        return connectdb('CHS', call_type="popup")
+
+    def get_end_conditions(self, *args):
+        """
+        Returns available end conditions for the laced column.
+        """
+        return ["Fixed-Fixed", "Fixed-Pinned", "Fixed-Free", "Pinned-Pinned"]
 
     def new_material(self, *args):
         """
@@ -702,7 +599,7 @@ class LacedColumn(Member):
                             elongation = 20 if fy_20 > 350 else (22 if 250 < fy_20 <= 350 else 23)
                             
                             # Add to database
-                            conn = sqlite3.connect(PATH_TO_DATABASE)
+                            conn = sqlite3.connect("Intg_osdag.sqlite")
                             c = conn.cursor()
                             c.execute('''INSERT INTO Material (Grade,[Yield Stress (< 20)],
                             [Yield Stress (20 -40)],[Yield Stress (> 40)],
@@ -748,7 +645,7 @@ class LacedColumn(Member):
     def Design_pref_modifier(self):
         print("Design_pref_modifier", self)
 
-    def input_values(self, ui_self=None):
+    def input_values(self, ui_self):
         """
         Returns list of tuples for input values.
         Format: (key, display key, type, values, required, validator)
@@ -785,57 +682,6 @@ class LacedColumn(Member):
         options_list.append((KEY_AXIAL_LOAD, "Axial Load (kN)", TYPE_TEXTBOX, None, True, 'Float Validator'))
 
         return options_list
-
-    def module_name(self):
-        return KEY_DISP_LACEDCOL
-
-    def get_section_sizes(self, *args):
-        """
-        Returns available section sizes based on the selected profile.
-        Fetches sections directly from the database tables.
-        """
-        if not args or not args[0]:
-            return connectdb('Columns', call_type="popup")
-        profile = args[0]
-        if profile in ["I-section", "Columns"]:
-            # Get sections from Columns table
-            sections = connectdb('Columns', call_type="popup")
-            print(f"DEBUG: Available I-sections: {sections}")
-            return sections
-        elif profile == "Channels":
-            return connectdb('Channels', call_type="popup")
-        elif profile == "Angles":
-            return connectdb('Angles', call_type="popup")
-        elif profile == "RHS":
-            return connectdb('RHS', call_type="popup")
-        elif profile == "SHS":
-            return connectdb('SHS', call_type="popup")
-        elif profile == "CHS":
-            return connectdb('CHS', call_type="popup")
-        elif profile == "Custom":
-            return ["Custom"]
-        else:
-            return ["Custom"]
-
-    def get_end_conditions(self, *args):
-        """
-        Returns available end conditions.
-        """
-        return VALUES_END_COND if "VALUES_END_COND" in globals() else ["Fixed", "Hinged", "Free"]
-
-    def get_lacing_profiles(self, *args):
-        """
-        Returns lacing profile options based on selected lacing pattern.
-        """
-        if not args or not args[0]:
-            return connectdb('Angles', call_type="popup")
-        pattern = args[0]
-        if pattern == "Single Lacing" or pattern == "Double Lacing":
-            return connectdb('Angles', call_type="popup")
-        elif pattern == "Flat Bar":
-            return connectdb('Channels', call_type="popup")
-        else:
-            return []
 
     def module_name(self):
         return KEY_DISP_LACEDCOL
@@ -950,8 +796,8 @@ class LacedColumn(Member):
 
         # Section and Material Details
         out_list.append((None, "Section and Material Details", TYPE_TITLE, None, True))
-        out_list.append((KEY_SECSIZE, "Section Size", TYPE_TEXTBOX, self.section_size_1.designation if flag else '', True))
-        out_list.append((KEY_MATERIAL, "Material Grade", TYPE_TEXTBOX, self.material.get('grade', '') if flag else '', True))
+        out_list.append((KEY_SECSIZE, "Section Size", TYPE_TEXTBOX, self.section_size_1.designation if (flag and self.section_size_1 is not None) else '', True))
+        out_list.append((KEY_MATERIAL, "Material Grade", TYPE_TEXTBOX, self.material.get('grade', '') if self.material else '', True))
 
         # Effective Lengths
         out_list.append((None, "Effective Lengths", TYPE_TITLE, None, True))
@@ -1098,34 +944,6 @@ class LacedColumn(Member):
         # Proceed to formatting for summary/debug
         self.final_formatting_welded(design_dictionary)
 
-    def run_design(self, design_dict):
-        """
-        Public method to be called by UI or automation to run full design.
-        """
-        self.process_design(design_dict)
-        return self.design_status
-
-    def generate_latex_report(self):
-        """
-        Generates LaTeX report using the computed results.
-        Only if design status is OK.
-        """
-        if not self.design_status:
-            return "Design not safe. No report generated."
-
-        # Placeholder report generation
-        report = CreateLatex()
-        report.add_title("Laced Column Design Report")
-        report.add_section("Summary", [
-            f"Utilization Ratio: {self.utilization_ratio:.2f}",
-            f"Design Status: {'Safe' if self.design_status else 'Unsafe'}",
-            f"Lacing Angle: {self.lacing_incl_angle}°",
-            f"Required Weld Length: {self.result.get('weld_length_required', 'N/A')} mm"
-        ])
-        report.compile()
-
-        return "Report generation completed."
-
     def final_formatting_welded(self, design_dictionary):
         """
         Final reporting placeholder for welded laced column summary.
@@ -1144,11 +962,11 @@ class LacedColumn(Member):
         all_errors = []
         self.design_status = False
         flag = False
-        self.output_values(self, flag)
+        self.output_values(flag)  # Removed extra self parameter
         flag1 = False
         flag2 = False
         flag3 = False
-        option_list = self.input_values(self)
+        option_list = self.input_values(self)  # Removed extra self parameter
         missing_fields_list = []
         print(f'func_for_validation option_list {option_list}'
             f"\n  design_dictionary {design_dictionary}")
@@ -1192,7 +1010,7 @@ class LacedColumn(Member):
 
         if flag and flag1 and flag2 and flag3:
             print(f"\n design_dictionary{design_dictionary}")
-            self.set_input_values(self, design_dictionary)
+            self.set_input_values(design_dictionary)  # Removed extra self parameter
             if self.design_status == False and len(self.failed_design_dict) > 0:
                 logger.error("Design Failed, Check Design Report")
                 return  # ['Design Failed, Check Design Report'] @TODO
@@ -1274,9 +1092,8 @@ class LacedColumn(Member):
         De = S + 2 * Cyy
         De = max(De, 2 * bf)
         D = De + 2 * g
-        L = S + 2 * g
         t = (1 / 50) * (S + 2 * g)
-        return De, D, L, t
+        return De, D, t
 
     def tie_plate_front_to_front(self, S, Cyy, g):
         """Calculate tie plate dimensions for front-to-front arrangement"""
@@ -1482,7 +1299,7 @@ class LacedColumn(Member):
     def show_design_preferences(self):
         try:
             # If dialog already exists and is visible, just return
-            if self.design_pref_dialog is not None and self.design_pref_dialog.isVisible():
+            if self.design_pref_dialog is not None and self.design_pref_dialog.dialog.isVisible():
                 return True
                 
             # If dialog exists but is not visible, show it
@@ -1591,7 +1408,7 @@ class LacedColumn(Member):
             self.weld_size = ''
             self.weld_type = ''
             self.weld_strength = 0
-            self.lacing_incl_angle = 0
+            self.lacing_incl_angle = 0.0
             self.lacing_section = ''
             self.lacing_type = ''
             self.allowed_utilization = ''
@@ -1767,9 +1584,9 @@ class LacedColumn(Member):
             self.section_property = ISection(designation=section, material_grade=material_grade)
             
             if not self.section_property:
-                if self.logger:
-                    self.logger.error("Failed to create ISection object")
-                return None
+                               if self.logger:
+                                   self.logger.error("Failed to create ISection object")
+                                   return None
                 
             if self.logger:
                 self.logger.info("ISection object created successfully")
@@ -1782,7 +1599,7 @@ class LacedColumn(Member):
                 self.logger.info("Connecting to database for material properties")
                 
             # Connect to database to get material properties
-            conn = sqlite3.connect(PATH_TO_DATABASE)
+            conn = sqlite3.connect("Intg_osdag.sqlite")
             cursor = conn.cursor()
             
             # Get material properties
@@ -1798,10 +1615,13 @@ class LacedColumn(Member):
                 self.material_property.E = material_data[3]   # Young's modulus
                 self.material_property.G = material_data[4]   # Shear modulus
                 self.material_property.nu = material_data[5]  # Poisson's ratio
+               
                 self.material_property.rho = material_data[6]  # Density
                 
                 # Calculate epsilon
                 self.epsilon = math.sqrt(250 / self.material_property.fy)
+                
+               
                 
                 if self.logger:
                     self.logger.info(f"Material properties set: fy={self.material_property.fy}, fu={self.material_property.fu}")
@@ -1818,259 +1638,141 @@ class LacedColumn(Member):
                 self.logger.error(f"Error in section_connect_database: {str(e)}")
             return None
 
-    def warning_majorbending(self):
-        print(self)
-        if self[0] == VALUES_SUPP_TYPE_temp[2]:
-            return True
-        # elif self[0] == VALUES_SUPP_TYPE_temp[0] or self[0] == VALUES_SUPP_TYPE_temp[1] :
-        #     return True
-        else:
-            return False
+    def on_material_grade_selected(self, grade):
+        """Handle material grade selection."""
+        material = self.fetch_material_properties(grade)
+        if material:
+            self.fy = material.get('Yield Stress (< 20)', '')
+            self.fu = material.get('Ultimate Tensile Stress', '')
+            # Example: update UI fields
+            self.fy_lineedit.setText(str(self.fy))
+            self.fu_lineedit.setText(str(self.fu))
 
-    def output_modifier(self):
-        print(self)
-        if self[0] == VALUES_SUPP_TYPE_temp[2]:
-            return False
-        # elif self[0] == VALUES_SUPP_TYPE_temp[0] or self[0] == VALUES_SUPP_TYPE_temp[1] :
-        #     return True
-        else:
-            return True
+    def on_section_profile_selected(self, section_type):
+        """Handle section profile selection."""
+        designations = self.fetch_section_designations(section_type)
+        # Update the section designation dropdown in the UI with these values
+        return designations
 
-    def Design_pref_modifier(self):
-        print("Design_pref_modifier", self)
+    def on_section_designation_selected(self, section_type, designation):
+        """Handle section designation selection."""
+        section = self.fetch_section_properties(section_type, designation)
+        if section:
+            self.depth = section.get('Depth', '')
+            self.flange_width = section.get('FlangeWidth', '')
+            # Update other fields as needed
+            return section
+        return {}
 
-class LacedColumnWindow(QDialog):
-    def __init__(self, parent=None):
-        super(LacedColumnWindow, self).__init__(parent)
-        self.setupUi()
-        self.section_designation = None
-        self.logger = None
+    def initialize_db_connection(self):
+        """Initialize database connection if not already connected."""
+        if not self.conn:
+            self.conn = sqlite3.connect("")
+            self.conn.row_factory = sqlite3.Row
 
-    def setupUi(self):
-        """
-        Setup the UI components
-        """
-        # Create main layout
-        self.main_layout = QVBoxLayout(self)
-        
-        # Create input widgets
-        self.create_input_widgets()
-        
-        # Connect signals
-        self.connect_signals()
+    def fetch_material_properties(self, grade):
+        """Fetch material properties from database."""
+        self.initialize_db_connection()
+        cursor = self.conn.cursor()
+        cursor.execute("SELECT * FROM Material WHERE Grade = ?", (grade,))
+        row = cursor.fetchone()
+        if row:
+            self.material_data = dict(row)
+            return self.material_data
+        return {}
 
-    def create_input_widgets(self):
-        """
-        Create all input widgets
-        """
-        # Section Profile
-        self.sec_profile_combo = QComboBox()
-        self.sec_profile_combo.addItems(['Angle', 'Channel'])
-        self.sec_profile_combo.setObjectName(KEY_SEC_PROFILE)
-        
-        # Section Size
-        self.sec_size_combo = QComboBox()
-        self.sec_size_combo.addItems(['All', 'Customized'])
-        self.sec_size_combo.setObjectName(KEY_SECSIZE)
-        
-        # Add to layout
-        self.main_layout.addWidget(QLabel("Section Profile:"))
-        self.main_layout.addWidget(self.sec_profile_combo)
-        self.main_layout.addWidget(QLabel("Section Size:"))
-        self.main_layout.addWidget(self.sec_size_combo)
-
-    def connect_signals(self):
-        """
-        Connect all signals safely
-        """
-        try:
-            # Connect section profile changes
-            if isinstance(self.sec_profile_combo, QComboBox):
-                self.sec_profile_combo.activated.connect(
-                    partial(self.handle_profile_change, self.sec_profile_combo)
-                )
-                print(f"[INFO] Connected profile change signal for {KEY_SEC_PROFILE}")
-            
-            # Connect section size changes
-            if isinstance(self.sec_size_combo, QComboBox):
-                self.sec_size_combo.activated.connect(
-                    partial(self.handle_size_change, self.sec_size_combo)
-                )
-                print(f"[INFO] Connected size change signal for {KEY_SECSIZE}")
-        except Exception as e:
-            print(f"[ERROR] Failed to connect signals: {str(e)}")
-            if self.logger:
-                self.logger.error(f"Failed to connect signals: {str(e)}")
-
-    def handle_profile_change(self, widget):
-        """
-        Handle section profile changes
-        """
-        try:
-            if not isinstance(widget, QComboBox):
-                return
-                
-            profile = widget.currentText()
-            sections = self.fn_profile_section(profile)
-            
-            # Update section size combo
-            if isinstance(self.sec_size_combo, QComboBox):
-                self.sec_size_combo.clear()
-                self.sec_size_combo.addItems(sections if sections else ['All', 'Customized'])
-
-        except Exception as e:
-            print(f"[ERROR] Failed to handle profile change: {str(e)}")
-            if self.logger:
-                self.logger.error(f"Failed to handle profile change: {str(e)}")
-
-    def handle_size_change(self, widget):
-        """
-        Handle section size changes
-        """
-        try:
-            if not isinstance(widget, QComboBox):
-                return
-                
-            size = widget.currentText()
-            if size == 'Customized':
-                self.show_custom_section_dialog()
-                
-        except Exception as e:
-            print(f"[ERROR] Failed to handle size change: {str(e)}")
-            if self.logger:
-                self.logger.error(f"Failed to handle size change: {str(e)}")
-                
-    def fn_profile_section(self, profile):
-        """
-        Handle section profile selection for laced column.
-        Returns available sections based on selected profile type.
-        """
-        try:
-            if not profile:
-                return []
-                
-            if profile == 'Angle':
-                sections = connectdb('Angles', call_type="popup")
-                return sections if sections else []
-            elif profile == 'Channel':
-                sections = connectdb('Channels', call_type="popup")
-                return sections if sections else []
-            elif profile in ['Customized', '2 Channels Back to Back', '2 Channels Toe to Toe', '2 Girders']:
-                # Show custom section dialog
-                dialog = SectionDesignationDialog()
-                result = dialog.exec_()
-                
-                if result == QDialog.Accepted:
-                    section_data = dialog.get_section_data()
-                    if section_data:
-                        # Validate all fields are filled
-                        if not all([section_data.get('designation'), section_data.get('depth'),
-                                  section_data.get('flange_width'), section_data.get('flange_thickness'),
-                                  section_data.get('web_thickness')]):
-                            QMessageBox.warning(dialog, "Error", "Please fill all required fields")
-                            return []
-                        
-                        try:
-                            # Add to database
-                            conn = sqlite3.connect(PATH_TO_DATABASE)
-                            c = conn.cursor()
-                            c.execute('''INSERT INTO ISection (Designation, Depth, FlangeWidth,
-                            FlangeThickness, WebThickness, RootRadius, ToeRadius, FlangeSlope) 
-                            VALUES (?,?,?,?,?,?,?,?)''',
-                            (section_data.get('designation'), section_data.get('depth'),
-                             section_data.get('flange_width'), section_data.get('flange_thickness'),
-                             section_data.get('web_thickness'), section_data.get('root_radius'),
-                             section_data.get('toe_radius'), section_data.get('flange_slope')))
-                            conn.commit()
-                            conn.close()
-                            
-                            # Update section properties and return list
-                            self.section_designation = section_data.get('designation')
-                            return [self.section_designation]
-                            
-                        except sqlite3.Error as e:
-                            QMessageBox.critical(dialog, "Database Error", f"Failed to add section: {str(e)}")
-                return []
-            
-        except Exception as e:
-            if self.logger:
-                self.logger.error(f"Error in fn_profile_section: {str(e)}")
+    def fetch_section_designations(self, section_type):
+        """Fetch available section designations for a given section type."""
+        self.initialize_db_connection()
+        table_map = {
+            "I-section": "ISection",
+            "Channel": "Channels",
+            "Angle": "Angles"
+        }
+        table = table_map.get(section_type)
+        if not table:
             return []
+        cursor = self.conn.cursor()
+        cursor.execute(f"SELECT Designation FROM {table}")
+        return [r[0] for r in cursor.fetchall()]
 
-    def input_value_changed(self):
+    def fetch_section_properties(self, section_type, designation):
+        """Fetch section properties for a given section type and designation."""
+        self.initialize_db_connection()
+        table_map = {
+            "I-section": "ISection",
+            "Channel": "Channels",
+            "Angle": "Angles"
+        }
+        table = table_map.get(section_type)
+        if not table:
+            return {}
+        cursor = self.conn.cursor()
+        cursor.execute(f"SELECT * FROM {table} WHERE Designation = ?", (designation,))
+        row = cursor.fetchone()
+        if row:
+            self.section_data = dict(row)
+            self.section_designation = designation
+            return self.section_data
+        return {}
+
+    def on_user_input(self, design_dict):
+        # Fetch material and section properties from DB
+        material = self.fetch_material_properties(design_dict.get("material"))
+        section = self.fetch_section_properties(design_dict.get("sec_profile"), design_dict.get("sec_size"))
+        # Merge DB values into design_dict for calculation
+        if material:
+            design_dict["fy"] = material.get("Yield Stress (< 20)", 0)
+            design_dict["fu"] = material.get("Ultimate Tensile Stress", 0)
+        if section:
+            design_dict["area"] = section.get("Area", 0)
+            design_dict["depth"] = section.get("Depth", 0)
+            # ...add other needed section properties...
+        # Calculate results using lacedcolumndesign formulas
+        result = LacedColumnDesign.calculate_all(design_dict)
+        self.result = result
+        return result
+
+    def input_dictionary_without_design_pref(self):
         """
-        Returns list of tuples for input value changes.
-        Format: ([input keys], output key, type, function)
+        Returns list of tuples for default design preference values if the design preference dialog is never opened.
+        Format: (Key of input dock, [List of Design Preference Keys], 'Input Dock')
         """
-        lst = []
+        design_input = []
+        # Adjust these keys as per your actual laced column design preferences
+        t1 = (KEY_MATERIAL, [KEY_MATERIAL], 'Input Dock')
+        t2 = (None, [KEY_DISP_LACEDCOL_ALLOWABLE_UR, KEY_DISP_LACEDCOL_EFFECTIVE_AREA], '')
+        design_input.append(t1)
+        design_input.append(t2)
+        return design_input
 
-        # Section profile changes - This triggers the popup when "Customized" is selected
-        t1 = ([KEY_SEC_PROFILE], KEY_SECSIZE, TYPE_COMBOBOX_CUSTOMIZED, self.fn_profile_section)
-        lst.append(t1)
-
-        # Material changes
-        t2 = ([KEY_MATERIAL], KEY_MATERIAL, TYPE_CUSTOM_MATERIAL, self.new_material)
-        lst.append(t2)
-
-        # Length changes
-        t3 = ([KEY_LYY], KEY_END_COND_YY, TYPE_COMBOBOX_CUSTOMIZED, self.get_end_conditions)
-        lst.append(t3)
-
-        t4 = ([KEY_LZZ], KEY_END_COND_ZZ, TYPE_COMBOBOX_CUSTOMIZED, self.get_end_conditions)
-        lst.append(t4)
-
-        return lst
-
-    def customized_input(self, ui_self=None):
+    def tab_list(self):
         """
-        Returns list of tuples for customized input values.
-        Format: (key, function)
+        Returns a list of tuples for the design preferences tabs.
+        Each tuple: (Tab Title, Tab Type, function for tab content)
         """
-        return [(KEY_SECSIZE, self.fn_profile_section)]
+        tabs = [
+            ("Section", "TYPE_TAB_1", self.get_section_tab_elements),
+            ("Material", "TYPE_TAB_2", self.get_material_tab_elements),
+            ("Connection", "TYPE_TAB_3", self.get_connection_tab_elements),
+        ]
+        return tabs
 
-# Utility function to fetch section designations from the database
-def get_section_designations():
-    conn = sqlite3.connect('PATH_TO_YOUR_DB')  # TODO: Update with your actual DB path
-    cursor = conn.cursor()
-    cursor.execute("SELECT Designation FROM Columns")
-    designations = [row[0] for row in cursor.fetchall()]
-    conn.close()
-    return designations
+    def get_section_tab_elements(self, *args):
+        # Return a list of tuples for section tab content
+        return []
 
-# Dialog for customized section selection
-class CustomizedSectionDialog(QDialog):
-    def __init__(self, designations, parent=None):
-        super().__init__(parent)
-        self.setWindowTitle("Customized")
-        self.setMinimumWidth(400)
-        layout = QVBoxLayout()
-        label_layout = QHBoxLayout()
-        label_layout.addWidget(QLabel("Available:"))
-        label_layout.addWidget(QLabel("Selected:"))
-        layout.addLayout(label_layout)
-        self.available_list = QListWidget()
-        self.selected_list = QListWidget()
-        self.selected_list.addItems(designations)
-        list_layout = QHBoxLayout()
-        list_layout.addWidget(self.available_list)
-        list_layout.addWidget(self.selected_list)
-        layout.addLayout(list_layout)
-        self.submit_btn = QPushButton("Submit")
-        self.submit_btn.clicked.connect(self.accept)
-        layout.addWidget(self.submit_btn)
-        self.setLayout(layout)
-    def get_selected(self):
-        return self.selected_list.currentItem().text() if self.selected_list.currentItem() else None
+    def get_material_tab_elements(self, *args):
+        # Return a list of tuples for material tab content
+        return []
 
-# Show the dialog and handle selection
-def show_customized_section_dialog(self):
-    designations = get_section_designations()
-    dialog = CustomizedSectionDialog(designations, self)
-    if dialog.exec_() == QDialog.Accepted:
-        selected = dialog.get_selected()
-        if selected:
-            # Set this value in your UI or data structure as needed
-            print("Selected section:", selected)
-            # Example: self.section_designation = selected
-            return selected
-    return None
+    def get_connection_tab_elements(self, *args):
+        # Return a list of tuples for connection tab content
+        return []
+
+    def tab_value_changed(self):
+        change_tab = []
+        # Example: Add a tuple for section material changes
+        t1 = (KEY_DISP_COLSEC, [KEY_SEC_MATERIAL], [KEY_SEC_FU, KEY_SEC_FY], TYPE_TEXTBOX, self.get_fu_fy_I_section)
+        change_tab.append(t1)
+        return change_tab

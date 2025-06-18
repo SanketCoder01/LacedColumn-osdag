@@ -1,8 +1,11 @@
 """
 Main module: Design of Compression Member
-Sub-module:  Design of Lacedcolumn (loaded axially)
+Sub-module:  Design of column (loaded axially)
 
-@author: Sanket Gaikwad 
+@author:Sanket Gaikwad
+
+Reference:
+            1) IS 800: 2007 General construction in steel - Code of practice (Third revision)
 
 """
 import logging
@@ -153,6 +156,7 @@ class LacedColumn(Member):
             KEY_DISP_LACEDCOL_EFFECTIVE_AREA: "1.0",
             KEY_DISP_LACEDCOL_ALLOWABLE_UR: "1.0"
         }
+        self.design_pref = {}  # Ensure design_pref is always defined
         # Define input line edits for unsupported lengths and axial load
         self.unsupported_length_yy_lineedit = QLineEdit()
         self.unsupported_length_zz_lineedit = QLineEdit()
@@ -240,23 +244,23 @@ class LacedColumn(Member):
         self.bolt_length = calc_result.get("bolt_length", 0)
         self.design_strength = calc_result.get("lacing_design_strength", 0)
         self.warnings = calc_result.get("warnings", [])
-
+        
     def validate_inputs(self):
         """
         Validate user inputs before calculation.
-        Only show error popup for required numeric input fields.
+        Only show error popup for required numeric input fields (QLineEdit), not for ComboBox/drop-down fields.
         """
         required_fields = [
             ("Unsupported Length (y-y)", self.unsupported_length_yy_lineedit),
             ("Unsupported Length (z-z)", self.unsupported_length_zz_lineedit),
-            ("Axial Load", self.axial_load_lineedit)
+            ("Axial Load", self.axial_load_lineedit),
         ]
         missing_fields = []
         for label, widget in required_fields:
             if widget is None:
                 continue
             if isinstance(widget, QLineEdit) and not widget.text().strip():
-                if label not in missing_fields:  # ❗ Avoid duplicates
+                if label not in missing_fields:
                     missing_fields.append(label)
         if missing_fields:
             QMessageBox.warning(None, "Missing Input",
@@ -479,7 +483,7 @@ class LacedColumn(Member):
 
         # Section and Material Details
         out_list.append((None, "Section and Material Details", TYPE_TITLE, None, True))
-        out_list.append((KEY_SECSIZE, "Section Size", TYPE_TEXTBOX, self.section_size_1.designation if (flag and getattr(self, 'section_size_1', None) is not None) else '', True))
+        out_list.append((KEY_SECSIZE, "Section Size", TYPE_TEXTBOX, getattr(self, 'section_designation', '') if flag else '', True))
         out_list.append((KEY_MATERIAL, "Material Grade", TYPE_TEXTBOX, self.material.get('grade', '') if getattr(self, 'material', None) else '', True))
 
         # Effective Lengths
@@ -927,7 +931,7 @@ class LacedColumn(Member):
 
         # Section and Material Details
         out_list.append((None, "Section and Material Details", TYPE_TITLE, None, True))
-        out_list.append((KEY_SECSIZE, "Section Size", TYPE_TEXTBOX, self.section_size_1.designation if (flag and getattr(self, 'section_size_1', None) is not None) else '', True))
+        out_list.append((KEY_SECSIZE, "Section Size", TYPE_TEXTBOX, getattr(self, 'section_designation', '') if flag else '', True))
         out_list.append((KEY_MATERIAL, "Material Grade", TYPE_TEXTBOX, self.material.get('grade', '') if getattr(self, 'material', None) else '', True))
 
         # Effective Lengths
@@ -1541,4 +1545,3 @@ class LacedColumn(Member):
             self.design_status = False
             self.failed_design_dict = {'error': str(e)}
             self.design_log.append(f"Design failed: {e}")
-

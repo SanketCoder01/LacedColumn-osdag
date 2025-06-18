@@ -150,9 +150,206 @@ class LacedColumn(Member):
         self.effective_area_param = 0.0  # Initialize effective_area_param attribute
 
         self.failed_design_dict = {}  # Initialize failed_design_dict attribute
+    
+       ###################################
+    # design preference functions start
+    ###################################
 
-        # Connect the material combo box to the on_material_grade_selected method
-        self.material_combo.currentTextChanged.connect(self.on_material_grade_selected)
+    def tab_list(self):
+        """Returns list of tabs for design preferences"""
+        tabs = []
+        
+        # Column Section tab
+        t1 = (KEY_DISP_COLSEC, TYPE_TAB_1, self.tab_section)
+        tabs.append(t1)
+        
+        # Weld Preferences tab
+        t2 = ("Weld Preferences", TYPE_TAB_4, self.all_weld_design_values)
+        tabs.append(t2)
+        
+        return tabs
+
+    def all_weld_design_values(self, *args):
+        return [
+            (KEY_DISP_LACEDCOL_LACING_PROFILE_TYPE, "Lacing Profile Type", TYPE_COMBOBOX, ["Angle", "Channel", "Flat"], True, 'No Validator'),
+            (KEY_DISP_LACEDCOL_LACING_PROFILE, "Lacing Profile Section", TYPE_COMBOBOX_CUSTOMIZED, self.get_lacing_profiles, True, 'No Validator'),
+            (KEY_DISP_LACEDCOL_EFFECTIVE_AREA, "Effective Area Parameter", TYPE_COMBOBOX, ["1.0", "0.9", "0.8", "0.7", "0.6", "0.5", "0.4", "0.3", "0.2", "0.1"], True, 'No Validator'),
+            (KEY_DISP_LACEDCOL_ALLOWABLE_UR, "Allowable Utilization Ratio", TYPE_COMBOBOX, ["1.0", "0.95", "0.9", "0.85"], True, 'No Validator'),
+            (KEY_DISP_LACEDCOL_BOLT_DIAMETER, "Bolt Diameter", TYPE_COMBOBOX, ["16mm", "20mm", "24mm", "27mm"], True, 'No Validator'),
+            (KEY_DISP_LACEDCOL_WELD_SIZE, "Weld Size", TYPE_COMBOBOX, ["4mm", "5mm", "6mm", "8mm"], True, 'No Validator')
+        ]
+
+    def tab_value_changed(self):
+        """
+        Returns list of tuples for tab value changes.
+        Format: (tab name, [input keys], [output keys], type, function)
+        """
+        change_tab = []
+
+        # Section material changes
+        # Material properties update
+        t1 = (KEY_DISP_COLSEC, [KEY_SEC_MATERIAL], [KEY_SEC_FU, KEY_SEC_FY], TYPE_TEXTBOX, self.get_fu_fy_I_section)
+        change_tab.append(t1)
+
+        # Section properties update
+        t2 = (KEY_DISP_COLSEC, ['Label_1', 'Label_2', 'Label_3', 'Label_4', 'Label_5'],
+              ['Label_11', 'Label_12', 'Label_13', 'Label_14', 'Label_15', 'Label_16', 'Label_17', 'Label_18',
+               'Label_19', 'Label_20', 'Label_21', 'Label_22', KEY_IMAGE], TYPE_TEXTBOX, self.get_I_sec_properties)
+        change_tab.append(t2)
+
+        # Source update
+        t3 = (KEY_DISP_COLSEC, [KEY_SECSIZE], [KEY_SOURCE], TYPE_TEXTBOX, self.change_source)
+        change_tab.append(t3)
+
+        return change_tab
+
+    def edit_tabs(self):
+        return []
+
+    def input_dictionary_design_pref(self):
+        """
+        Returns list of tuples for design preferences.
+        Format: (tab name, input widget type, [list of keys])
+        """
+        design_input = []
+
+        # Section profile and material
+        t1 = (KEY_DISP_COLSEC, TYPE_COMBOBOX, [KEY_SEC_MATERIAL])
+        design_input.append(t1)
+
+        # Section properties
+        t2 = (KEY_DISP_COLSEC, TYPE_TEXTBOX, [KEY_SEC_FU, KEY_SEC_FY])
+        design_input.append(t2)
+
+        # Laced column specific
+        t3 = (KEY_DISP_LACEDCOL, TYPE_COMBOBOX, [KEY_LACEDCOL_MATERIAL])
+        design_input.append(t3)
+
+        return design_input
+
+    def input_dictionary_without_design_pref(self):
+        """
+        Returns list of tuples for input dictionary without design preferences.
+        Format: [(key, [list of keys], source)]
+        """
+        design_input = []
+        
+        # Material input with safe defaults
+        t1 = (KEY_MATERIAL, [KEY_SEC_MATERIAL], 'Input Dock')
+        design_input.append(t1)
+
+        # Weld preferences with safe defaults
+        t2 = (None, [
+                KEY_DISP_LACEDCOL_LACING_PROFILE_TYPE,
+                KEY_DISP_LACEDCOL_LACING_PROFILE,
+                KEY_DISP_LACEDCOL_EFFECTIVE_AREA,
+                KEY_DISP_LACEDCOL_ALLOWABLE_UR,
+                KEY_DISP_LACEDCOL_BOLT_DIAMETER,
+                KEY_DISP_LACEDCOL_WELD_SIZE
+            ], '')
+        design_input.append(t2)
+        t2 = (KEY_SECSIZE, [KEY_SECSIZE], 'Input Dock')
+        design_input.append(t2)
+
+        # Column section preferences with safe defaults
+        t3 = (KEY_DISP_COLSEC, [
+            KEY_DISP_LACEDCOL_MATERIAL,
+            KEY_SEC_FU, 
+            KEY_SEC_FY
+        ], 'Input Dock')
+        design_input.append(t3)
+
+        return design_input
+
+    def get_values_for_design_pref(self, key, design_dictionary):
+        """
+        Returns default values for design preferences when not opened by user.
+        """
+        if not design_dictionary or design_dictionary.get(KEY_SECSIZE, 'Select Section') == 'Select Section' or \
+                design_dictionary.get(KEY_MATERIAL, 'Select Material') == 'Select Material':
+            fu = ''
+            fy = ''
+        else:
+            material = Material(design_dictionary[KEY_MATERIAL], 41)
+            fu = material.fu
+            fy = material.fy
+
+        val = {
+            KEY_SECSIZE: 'Select Section',  # Main section size key
+            KEY_DISP_LACEDCOL_SEC_SIZE: 'Select Section',  # Keep this for backward compatibility
+            KEY_DISP_LACEDCOL_LACING_PROFILE_TYPE: "Angle",
+            KEY_DISP_LACEDCOL_LACING_PROFILE: "ISA 40x40x5",
+            KEY_DISP_LACEDCOL_EFFECTIVE_AREA: "1.0",
+            KEY_DISP_LACEDCOL_ALLOWABLE_UR: "1.0",
+            KEY_DISP_LACEDCOL_BOLT_DIAMETER: "16mm",
+            KEY_DISP_LACEDCOL_WELD_SIZE: "5mm",
+            KEY_SEC_FU: fu,
+            KEY_SEC_FY: fy,
+            KEY_SEC_MATERIAL: design_dictionary.get(KEY_MATERIAL, 'Select Material'),
+            # Add defaults for any label keys that might be undefined
+            'Label_1': '',
+            'Label_2': '',
+            'Label_3': '',
+            'Label_4': '',
+            'Label_5': '',
+            'Label_11': '',
+            'Label_12': '',
+            'Label_13': '',
+            'Label_14': '',
+            'Label_15': '',
+            'Label_16': '',
+            'Label_17': '',
+            'Label_18': '',
+            'Label_19': '',
+            'Label_20': '',
+            'Label_21': '',
+            'Label_22': '',
+            'Label_HS_1': '',
+            'Label_HS_2': '',
+            'Label_HS_3': '',
+            'Label_HS_11': '',
+            'Label_HS_12': '',
+            'Label_HS_13': '',
+            'Label_HS_14': '',
+            'Label_HS_15': '',
+            'Label_HS_16': '',
+            'Label_HS_17': '',
+            'Label_HS_18': '',
+            'Label_HS_19': '',
+            'Label_HS_20': '',
+            'Label_HS_21': '',
+            'Label_HS_22': '',
+            'Label_CHS_1': '',
+            'Label_CHS_2': '',
+            'Label_CHS_3': '',
+            'Label_CHS_11': '',
+            'Label_CHS_12': '',
+            'Label_CHS_13': ''
+        }[key]
+
+        return val
+
+    def get_lacing_profiles(self, *args):
+        """
+        Returns lacing profile options based on selected lacing pattern.
+        """
+        if not args or not args[0]:
+            return connectdb('Angles', call_type="popup")
+
+        pattern = args[0]
+        if pattern == "Single Lacing":
+            return connectdb('Angles', call_type="popup")
+        elif pattern == "Double Lacing":
+            return connectdb('Angles', call_type="popup")
+        elif pattern == "Flat Bar":
+            return connectdb('Channels', call_type="popup")
+        else:
+            return []
+
+    ###################################
+    # design preference functions end
+    ###################################
+
 
     def initialize_result_dict(self):
         """
@@ -1667,7 +1864,7 @@ class LacedColumn(Member):
     def initialize_db_connection(self):
         """Initialize database connection if not already connected."""
         if not self.conn:
-            self.conn = sqlite3.connect("")
+            self.conn = sqlite3.connect("osdag.db")
             self.conn.row_factory = sqlite3.Row
 
     def fetch_material_properties(self, grade):
@@ -1733,46 +1930,4 @@ class LacedColumn(Member):
         self.result = result
         return result
 
-    def input_dictionary_without_design_pref(self):
-        """
-        Returns list of tuples for default design preference values if the design preference dialog is never opened.
-        Format: (Key of input dock, [List of Design Preference Keys], 'Input Dock')
-        """
-        design_input = []
-        # Adjust these keys as per your actual laced column design preferences
-        t1 = (KEY_MATERIAL, [KEY_MATERIAL], 'Input Dock')
-        t2 = (None, [KEY_DISP_LACEDCOL_ALLOWABLE_UR, KEY_DISP_LACEDCOL_EFFECTIVE_AREA], '')
-        design_input.append(t1)
-        design_input.append(t2)
-        return design_input
-
-    def tab_list(self):
-        """
-        Returns a list of tuples for the design preferences tabs.
-        Each tuple: (Tab Title, Tab Type, function for tab content)
-        """
-        tabs = [
-            ("Section", "TYPE_TAB_1", self.get_section_tab_elements),
-            ("Material", "TYPE_TAB_2", self.get_material_tab_elements),
-            ("Connection", "TYPE_TAB_3", self.get_connection_tab_elements),
-        ]
-        return tabs
-
-    def get_section_tab_elements(self, *args):
-        # Return a list of tuples for section tab content
-        return []
-
-    def get_material_tab_elements(self, *args):
-        # Return a list of tuples for material tab content
-        return []
-
-    def get_connection_tab_elements(self, *args):
-        # Return a list of tuples for connection tab content
-        return []
-
-    def tab_value_changed(self):
-        change_tab = []
-        # Example: Add a tuple for section material changes
-        t1 = (KEY_DISP_COLSEC, [KEY_SEC_MATERIAL], [KEY_SEC_FU, KEY_SEC_FY], TYPE_TEXTBOX, self.get_fu_fy_I_section)
-        change_tab.append(t1)
-        return change_tab
+   

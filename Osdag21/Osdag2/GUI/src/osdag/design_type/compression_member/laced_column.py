@@ -50,15 +50,8 @@ from PyQt5.QtWidgets import QDialogButtonBox
 import sqlite3
 from functools import partial
 import os
-from osdag.design_type.compression_member.LacedColumnDesign import LacedColumnDesign
-from osdag.utils.common.component import BackToBackChannelLaced, FrontToFrontChannelLaced, DoubleGirderLaced, Material
-# NEW: Import calculation class
 from .LacedColumnDesign import LacedColumnDesign
-
-try:
-    KEY_BOLT_LENGTH
-except NameError:
-    KEY_BOLT_LENGTH = 'KEY_BOLT_LENGTH'
+from ...utils.common.component import Material
 
 class MaterialDialog(QDialog):
     def __init__(self, parent=None):
@@ -168,87 +161,11 @@ class LacedColumn(Member):
         self.section_profile_combo = QComboBox()
         self.section_designation_combo = QComboBox()
 
-    def get_lacing_profiles(self, *args):
-        """
-        Returns lacing profile options based on selected lacing pattern.
-        """
-        try:
-            if not args:
-                return ['All', 'Customized']
-            value = args[0]
-            if value == "Customized":
-                # self.show_custom_section_dialog()  # Commented out: method does not exist
-                return [self.section_designation] if self.section_designation else ['Customized']
-            if value == 'Angle':
-                return connectdb('Angles', call_type="popup")
-            elif value == 'Channel':
-                return connectdb('Channels', call_type="popup")
-            elif value in ['Customized', '2-channels Back-to-Back', '2-channels Toe-to-Toe', '2-Girders']:
-                # self.show_custom_section_dialog()  # Commented out: method does not exist
-                return [self.section_designation] if self.section_designation else ['Customized']
-            return ['All', 'Customized']
-        except Exception as e:
-            if self.logger:
-                self.logger.error(f"Error in fn_profile_section: {str(e)}")
-            return []
-
-    def set_input_values(self, design_dictionary):
-        """Sets input values with proper validation and uses new laced section classes and LacedColumnDesign.calculate."""
-        if not isinstance(design_dictionary, dict):
-            raise ValueError("design_dictionary must be a dictionary")
-        # Map section profile to new classes
-        sec_profile = design_dictionary.get(KEY_LACEDCOL_SEC_PROFILE, "")
-        sec_list = design_dictionary.get(KEY_LACEDCOL_SEC_SIZE, [])
-        material_grade = design_dictionary.get(KEY_LACEDCOL_MATERIAL, "")
-        if sec_profile == KEY_LACEDCOL_SEC_PROFILE_OPTIONS[0]:
-            section_class = BackToBackChannel
-        elif sec_profile == KEY_LACEDCOL_SEC_PROFILE_OPTIONS[1]:
-            section_class = ToeToToeChannel
-        elif sec_profile == KEY_LACEDCOL_SEC_PROFILE_OPTIONS[2]:
-            section_class = DoubleGirder
-        else:
-            section_class = DoubleGirder
-        # Use first section in list for now
-        section = sec_list[0] if sec_list else None
-        self.section = section_class(section, material_grade) if section else None
-        self.material_obj = Material(material_grade)
-        # Prepare lacing pattern and length
-        lacing_pattern = design_dictionary.get(KEY_LACING_PATTERN, "single").lower()
-        lacing_length = float(design_dictionary.get(KEY_LACEDCOL_UNSUPPORTED_LENGTH_YY, 0))
-        rmin = getattr(self.section, 'rmin', 10)  # fallback if not present
-        weld_fu = getattr(self.material_obj, 'fu', 410)
-        weld_size = float(str(design_dictionary.get(KEY_DISP_LACEDCOL_WELD_SIZE, "5")).replace("mm", ""))
-        bolt_fu = getattr(self.material_obj, 'fu', 410)
-        bolt_dia = float(str(design_dictionary.get(KEY_DISP_LACEDCOL_BOLT_DIAMETER, "16")).replace("mm", ""))
-        axial_load = float(design_dictionary.get(KEY_AXIAL_LOAD, 0))
-        # Call LacedColumnDesign.calculate
-        self.design_model = LacedColumnDesign({})
-        calc_result = self.design_model.calculate(
-            section_obj=self.section,
-            material_obj=self.material_obj,
-            axial_load=axial_load,
-            lacing_pattern=lacing_pattern,
-            lacing_length=lacing_length,
-            rmin=rmin,
-            weld_fu=weld_fu,
-            weld_size=weld_size,
-            bolt_fu=bolt_fu,
-            bolt_dia=bolt_dia
-        )
-        self.result = calc_result
-        self.design_status = True if calc_result else False
-        self.utilization_ratio = calc_result.get("lacing_utilization", 0)
-        self.lacing_force = calc_result.get("lacing_force", 0)
-        self.lacing_length = lacing_length
-        self.weld_length = calc_result.get("weld_length", 0)
-        self.bolt_length = calc_result.get("bolt_length", 0)
-        self.design_strength = calc_result.get("lacing_design_strength", 0)
-        self.warnings = calc_result.get("warnings", [])
-        
     def validate_inputs(self):
         """
         Validate user inputs before calculation.
         Only show error popup for required numeric input fields (QLineEdit), not for ComboBox/drop-down fields.
+        Material grade and type of connection are not checked here.
         """
         required_fields = [
             ("Unsupported Length (y-y)", self.unsupported_length_yy_lineedit),
@@ -262,6 +179,7 @@ class LacedColumn(Member):
             if isinstance(widget, QLineEdit) and not widget.text().strip():
                 if label not in missing_fields:
                     missing_fields.append(label)
+        # Only warn for missing QLineEdit fields, not ComboBox fields
         if missing_fields:
             QMessageBox.warning(None, "Missing Input",
                 "Please fill the following required fields:\n" + "\n".join(missing_fields))
@@ -316,8 +234,8 @@ class LacedColumn(Member):
 
             self.length_yy = unsupported_length_yy
             self.length_zz = unsupported_length_zz
-            self.slenderness_yy = self.length_yy / getattr(section_obj, 'rad_of_gy_y', 1) if getattr(section_obj, 'rad_of_gy_y', 0) else 0
-            self.slenderness_zz = self.length_zz / getattr(section_obj, 'rad_of_gy_z', 1) if getattr(section_obj, 'rad_of_gy_z', 0) else 0
+            self.slenderness_yy = self.length_yy / getattr(section_obj, 'rmin', 1) if getattr(section_obj, 'rmin', 0) else 0
+            self.slenderness_zz = self.length_zz / getattr(section_obj, 'rmin', 1) if getattr(section_obj, 'rmin', 0) else 0
 
             # Use LacedColumnDesign for advanced outputs (spacing, tie plate, etc.)
             design_dict = {
@@ -446,7 +364,7 @@ class LacedColumn(Member):
             self.failed_design_dict = {
                 'UR': self.ur,
                 'fcd': self.fcd,
-                'design_strength': self.design_strength,
+                'design_strength': getattr(self, 'design_compressive_strength', 0),
                 'reason': 'Utilization Ratio exceeds allowable limit.'
             }
             self.warnings.append('Design failed: UR exceeds allowable limit.')
@@ -462,77 +380,6 @@ class LacedColumn(Member):
         # If failed, show best failed section data if available
         if not self.design_status and self.failed_design_dict:
             self.warnings.append(f"Best failed section data: {self.failed_design_dict}")
-
-    def output_values(self, flag):
-        """
-        Returns list of tuples to be displayed in the UI (Output Dock)
-        Format: (key, display_key, type, value, required)
-        """
-        from ...Common import (
-            KEY_SECSIZE, KEY_MATERIAL,
-            KEY_EFF_LEN_YY, KEY_EFF_LEN_ZZ,
-            KEY_END_COND_YY_1, KEY_END_COND_YY_2, KEY_END_COND_ZZ_1, KEY_END_COND_ZZ_2,
-            KEY_SLENDER_YY, KEY_SLENDER_ZZ,
-            KEY_FCD, KEY_DESIGN_COMPRESSIVE,
-            KEY_CHANNEL_SPACING,
-            KEY_TIE_PLATE_D, KEY_TIE_PLATE_T, KEY_TIE_PLATE_L,
-            KEY_LACING_SPACING, KEY_LACING_ANGLE, KEY_LACING_FORCE, KEY_LACING_SECTION_DIM,
-            KEY_WELD_LENGTH, KEY_BOLT_COUNT, TYPE_TITLE, TYPE_TEXTBOX
-        )
-        out_list = []
-
-        # Section and Material Details
-        out_list.append((None, "Section and Material Details", TYPE_TITLE, None, True))
-        out_list.append((KEY_SECSIZE, "Section Size", TYPE_TEXTBOX, getattr(self, 'section_designation', '') if flag else '', True))
-        out_list.append((KEY_MATERIAL, "Material Grade", TYPE_TEXTBOX, self.material.get('grade', '') if getattr(self, 'material', None) else '', True))
-
-        # Effective Lengths
-        out_list.append((None, "Effective Lengths", TYPE_TITLE, None, True))
-        out_list.append((KEY_EFF_LEN_YY, "Effective Length (YY)", TYPE_TEXTBOX, round(self.result.get('effective_length_yy', 0), 2) if flag else '', True))
-        out_list.append((KEY_EFF_LEN_ZZ, "Effective Length (ZZ)", TYPE_TEXTBOX, round(self.result.get('effective_length_zz', 0), 2) if flag else '', True))
-
-        # End Conditions
-        out_list.append((None, "End Conditions", TYPE_TITLE, None, True))
-        out_list.append((KEY_END_COND_YY_1, "End Condition YY-1", TYPE_TEXTBOX, self.result.get('end_condition_yy_1', '') if flag else '', True))
-        out_list.append((KEY_END_COND_YY_2, "End Condition YY-2", TYPE_TEXTBOX, self.result.get('end_condition_yy_2', '') if flag else '', True))
-        out_list.append((KEY_END_COND_ZZ_1, "End Condition ZZ-1", TYPE_TEXTBOX, self.result.get('end_condition_zz_1', '') if flag else '', True))
-        out_list.append((KEY_END_COND_ZZ_2, "End Condition ZZ-2", TYPE_TEXTBOX, self.result.get('end_condition_zz_2', '') if flag else '', True))
-
-        # Slenderness Ratios
-        out_list.append((None, "Slenderness Ratios", TYPE_TITLE, None, True))
-        out_list.append((KEY_SLENDER_YY, "Slenderness Ratio (YY)", TYPE_TEXTBOX, round(self.result.get('slenderness_yy', 0), 2) if flag else '', True))
-        out_list.append((KEY_SLENDER_ZZ, "Slenderness Ratio (ZZ)", TYPE_TEXTBOX, round(self.result.get('slenderness_zz', 0), 2) if flag else '', True))
-
-        # Design Values
-        out_list.append((None, "Design Values", TYPE_TITLE, None, True))
-        out_list.append((KEY_FCD, "Design Compressive Stress (fcd)", TYPE_TEXTBOX, round(self.result.get('fcd', 0), 2) if flag else '', True))
-        out_list.append((KEY_DESIGN_COMPRESSIVE, "Design Compressive Strength", TYPE_TEXTBOX, round(self.result.get('design_compressive_strength', 0), 2) if flag else '', True))
-
-        # Channel Spacing
-        out_list.append((None, "Channel Spacing", TYPE_TITLE, None, True))
-        out_list.append((KEY_CHANNEL_SPACING, "Spacing Between Channels", TYPE_TEXTBOX, round(self.result.get('channel_spacing', 0), 2) if flag else '', True))
-
-        # Tie Plate Details
-        out_list.append((None, "Tie Plate Details", TYPE_TITLE, None, True))
-        out_list.append((KEY_TIE_PLATE_D, "Overall Depth (D)", TYPE_TEXTBOX, round(self.result.get('tie_plate_depth', 0), 2) if flag else '', True))
-        out_list.append((KEY_TIE_PLATE_T, "Thickness (t)", TYPE_TEXTBOX, round(self.result.get('tie_plate_thickness', 0), 2) if flag else '', True))
-        out_list.append((KEY_TIE_PLATE_L, "Length (L)", TYPE_TEXTBOX, round(self.result.get('tie_plate_length', 0), 2) if flag else '', True))
-
-        # Lacing Details
-        out_list.append((None, "Lacing Details", TYPE_TITLE, None, True))
-        out_list.append((KEY_LACING_SPACING, "Lacing Spacing", TYPE_TEXTBOX, round(self.result.get('lacing_spacing', 0), 2) if flag else '', True))
-        out_list.append((KEY_LACING_ANGLE, "Lacing Angle", TYPE_TEXTBOX, round(self.result.get('lacing_angle', 0), 2) if flag else '', True))
-        out_list.append((KEY_LACING_FORCE, "Force on Lacing", TYPE_TEXTBOX, round(self.result.get('lacing_force', 0), 2) if flag else '', True))
-        out_list.append((KEY_LACING_SECTION_DIM, "Lacing Section Dimensions", TYPE_TEXTBOX, self.result.get('lacing_section_dim', '') if flag else '', True))
-
-        # Connection Details
-        out_list.append((None, "Connection Details", TYPE_TITLE, None, True))
-        if getattr(self, 'weld_type', '') == 'Welded':
-            out_list.append((KEY_WELD_LENGTH, "Required Weld Length", TYPE_TEXTBOX, round(self.result.get('weld_length', 0), 2) if flag else '', True))
-        else:
-            out_list.append((KEY_BOLT_COUNT, "Number of Bolts Required", TYPE_TEXTBOX, self.result.get('bolt_count', 0) if flag else '', True))
-
-        return out_list
 
     ###############################################
     # Design Preference Functions Start
@@ -924,7 +771,7 @@ class LacedColumn(Member):
             KEY_FCD, KEY_DESIGN_COMPRESSIVE,
             KEY_CHANNEL_SPACING,
             KEY_TIE_PLATE_D, KEY_TIE_PLATE_T, KEY_TIE_PLATE_L,
-            KEY_LACING_SPACING, KEY_LACING_ANGLE, KEY_LACING_FORCE, KEY_LACING_SECTION_DIM,
+            KEY_LACING_SPACING, KEY_LACING_ANGLE, KEY_LACING_FORCE,
             KEY_WELD_LENGTH, KEY_BOLT_COUNT, TYPE_TITLE, TYPE_TEXTBOX
         )
         out_list = []
@@ -989,17 +836,14 @@ class LacedColumn(Member):
         flag = False
         option_list = self.input_values(self)
         missing_fields_list = []
-        #print(f'func_for_validation option_list {option_list}')
+        # Only check TYPE_TEXTBOX (QLineEdit) fields for required input
         for option in option_list:
             if option[2] == TYPE_TEXTBOX:
                 if design_dictionary[option[0]] == '':
                     missing_fields_list.append(option[1])
                     print(option[1], option[2], option[0], design_dictionary[option[0]])
-            elif option[2] == TYPE_COMBOBOX and option[0] not in [KEY_SEC_PROFILE, KEY_END1, KEY_END2, KEY_END1_Y, KEY_END2_Y]:
-                val = option[3]
-                if design_dictionary[option[0]] == val[0]:
-                    missing_fields_list.append(option[1])
-                    print(option[1], option[2], option[0], design_dictionary[option[0]])
+        # Do NOT check TYPE_COMBOBOX fields for required input!
+        # (Removed ComboBox required check to prevent pop-up for Material, Lacing Pattern, Type of Connection)
 
         if len(missing_fields_list) > 0:
             print(design_dictionary)
@@ -1011,7 +855,7 @@ class LacedColumn(Member):
 
         if flag:
             print(f"\n design_dictionary{design_dictionary}")
-            self.set_input_values(self, design_dictionary)
+            self.set_input_values(design_dictionary)
             if self.design_status ==False and len(self.failed_design_dict)>0:
                 logger.error(
                     "Design Failed, Check Design Report"
@@ -1052,42 +896,29 @@ class LacedColumn(Member):
 
     # Setting inputs from the input dock GUI
     def set_input_values(self, design_dictionary):
-        super(ColumnDesign, self).set_input_values(self, design_dictionary)
-
         # section properties
         self.module = design_dictionary[KEY_DISP_LACEDCOL]
         self.mainmodule = 'Columns with known support conditions'
-        self.sec_profile = design_dictionary[KEY_LACEDCOL_SEC_PROFILE]
-        self.sec_list = design_dictionary[KEY_LACEDCOL_SEC_SIZE]
-        self.material = design_dictionary[KEY_LACEDCOL_MATERIAL]
-
-        # section user data
-        self.length_zz = float(design_dictionary[KEY_LACEDCOL_UNSUPPORTED_LENGTH_ZZ])
-        self.length_yy = float(design_dictionary[KEY_LACEDCOL_UNSUPPORTED_LENGTH_YY])
-
-        # end condition
-        self.end_1_z = design_dictionary[KEY_END_COND_ZZ_1]
-        self.end_2_z = design_dictionary[KEY_END_COND_ZZ_2]
-
-        self.end_1_y = design_dictionary[KEY_END_COND_YY_1]
-        self.end_2_y = design_dictionary[KEY_END_COND_YY_2]
-
-        # factored loads
-        self.load = Load(axial_force=design_dictionary[KEY_AXIAL_LOAD], shear_force="", moment="", moment_minor="", unit_kNm=True)
-
-        # design preferences
-        self.allowable_utilization_ratio = float(design_dictionary[KEY_DISP_LACEDCOL_ALLOWABLE_UR])
-        self.effective_area_factor = float(design_dictionary[KEY_LACEDCOL_EFFECTIVE_AREA])
-
+        self.sec_profile = design_dictionary.get(KEY_LACEDCOL_SEC_PROFILE, "")
+        self.sec_list = design_dictionary.get(KEY_LACEDCOL_SEC_SIZE, [])
+        self.material = design_dictionary.get(KEY_LACEDCOL_MATERIAL, "")
+        self.length_zz = float(design_dictionary.get(KEY_LACEDCOL_UNSUPPORTED_LENGTH_ZZ, 0))
+        self.length_yy = float(design_dictionary.get(KEY_LACEDCOL_UNSUPPORTED_LENGTH_YY, 0))
+        self.end_1_z = design_dictionary.get(KEY_END_COND_ZZ_1, "")
+        self.end_2_z = design_dictionary.get(KEY_END_COND_ZZ_2, "")
+        self.end_1_y = design_dictionary.get(KEY_END_COND_YY_1, "")
+        self.end_2_y = design_dictionary.get(KEY_END_COND_YY_2, "")
+        self.load = Load(
+            axial_force=design_dictionary.get(KEY_AXIAL_LOAD, 0),
+            shear_force=0.0, moment=0.0, moment_minor=0.0, unit_kNm=True
+        )
+        self.allowable_utilization_ratio = float(design_dictionary.get(KEY_DISP_LACEDCOL_ALLOWABLE_UR, 1.0))
+        self.effective_area_factor = float(design_dictionary.get(KEY_LACEDCOL_EFFECTIVE_AREA, 1.0))
         #TODO: @danish this should be handeled dynamically at run-time
         try:
             self.optimization_parameter = design_dictionary[KEY_OPTIMIZATION_PARA]
         except:
             self.optimization_parameter = 'Utilization Ratio'
-        # self.allow_class1 = design_dictionary[KEY_ALLOW_CLASS1]
-        # self.allow_class2 = design_dictionary[KEY_ALLOW_CLASS2]
-        # self.allow_class3 = design_dictionary[KEY_ALLOW_CLASS3]
-        # self.allow_class4 = design_dictionary[KEY_ALLOW_CLASS4]
         try:
             self.steel_cost_per_kg = float(design_dictionary[KEY_STEEL_COST])
         except:
@@ -1095,18 +926,7 @@ class LacedColumn(Member):
 
         self.allowed_sections = ['Plastic', 'Compact', 'Semi-Compact', 'Slender']
 
-        #TODO: @danish check this part if it is needed here
-        # if self.allow_class1 == "Yes":
-        #     self.allowed_sections.append('Plastic')
-        # if self.allow_class2 == "Yes":
-        #     self.allowed_sections.append('Compact')
-        # if self.allow_class3 == "Yes":
-        #     self.allowed_sections.append('Semi-Compact')
-        # if self.allow_class4 == "Yes":
-        #     self.allowed_sections.append('Slender')
-
         print(self.allowed_sections)
-
         print("==================")
         print(self.module)
         print(self.sec_list)
@@ -1121,19 +941,17 @@ class LacedColumn(Member):
 
         # safety factors
         self.gamma_m0 = IS800_2007.cl_5_4_1_Table_5["gamma_m0"]["yielding"]
-        # print(f"Here[Column/set_input_values/self.gamma_m0{self.gamma_m0}]")
-        # material property
         self.material_property = Material(material_grade=self.material, thickness=0)
 
         # initialize the design status
         self.design_status_list = []
         self.design_status = False
         self.failed_design_dict = {}
-        flag = self.section_classification(self)
+        flag = self.section_classification()
         print(flag)
         if flag:
-            self.design_column(self)
-            self.results(self)
+            self.design_column()
+            self.results()
         print(f"Here[Column/set_input_values]")
 
     # Simulation starts here
@@ -1338,7 +1156,7 @@ class LacedColumn(Member):
     def show_design_preferences(self):
         try:
             # If dialog already exists and is visible, just return
-            if self.design_pref_dialog is not None and self.design_pref_dialog.isVisible():
+            if self.design_pref_dialog is not None and hasattr(self.design_pref_dialog, 'isVisible') and self.design_pref_dialog.isVisible():
                 return True
                 
             # If dialog exists but is not visible, show it
@@ -1358,7 +1176,8 @@ class LacedColumn(Member):
                         field.setValidator(self.double_validator)
                         
             # Connect dialog close event to cleanup
-            self.design_pref_dialog.finished.connect(self.cleanup_design_pref_dialog)
+            if hasattr(self.design_pref_dialog, 'finished'):
+                self.design_pref_dialog.finished.connect(self.cleanup_design_pref_dialog)
             
             self.design_pref_dialog.show()
             return True
@@ -1369,7 +1188,7 @@ class LacedColumn(Member):
             return False
 
     def cleanup_design_pref_dialog(self):
-        if self.design_pref_dialog is not None:
+        if self.design_pref_dialog is not None and hasattr(self.design_pref_dialog, 'deleteLater'):
             self.design_pref_dialog.deleteLater()
             self.design_pref_dialog = None
             self.design_pref_dictionary = {

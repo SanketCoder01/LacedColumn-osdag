@@ -850,7 +850,7 @@ class Window(QMainWindow):
          "triggered.connect" for up to 10 customized popups
         """
 
-        new_list = main.customized_input(main)
+        new_list = main.customized_input()
         updated_list = main.input_value_changed()  # Remove main argument
         print(f'\n ui_template.py input_value_changed {updated_list} \n new_list {new_list}')
         data = {}
@@ -1519,6 +1519,12 @@ class Window(QMainWindow):
         self.fuse_model = None
         # print(f'setupUi done 10')
 
+        # After creating the material combo box:
+        # Find the material combo box and connect the event
+        material_combo = self.dockWidgetContents.findChild(QtWidgets.QComboBox, KEY_MATERIAL)
+        if material_combo:
+            material_combo.currentIndexChanged.connect(lambda: self.on_material_grade_changed(material_combo))
+
     def notification(self):
         update_class = Update()
         msg = update_class.notifi()
@@ -2154,7 +2160,7 @@ class Window(QMainWindow):
         # @author: Amir
 
         option_list = main.input_values(self)
-        for data_key_tuple in main.customized_input(main):
+        for data_key_tuple in main.customized_input():
             data_key = data_key_tuple[0] + "_customized"
             if data_key in data.keys() and len(data_key_tuple) == 4:
                 data[data_key] = [data_values for data_values in data[data_key]
@@ -3187,6 +3193,28 @@ class Window(QMainWindow):
             # self.OsdagSectionModeller.OCCFrame.setMinimumSize(490,350)
             self.OsdagSectionModeller.OCCWindow.setFocus()
         return set_size
+
+    def on_material_grade_changed(self, combo):
+        selected_grade = combo.currentText()
+        conn = sqlite3.connect(PATH_TO_DATABASE)
+        cur = conn.cursor()
+        cur.execute("SELECT fy, fu FROM Material WHERE grade = ?", (selected_grade,))
+        row = cur.fetchone()
+        conn.close()
+        fy_field = self.dockWidgetContents.findChild(QtWidgets.QLineEdit, 'fy_field')
+        fu_field = self.dockWidgetContents.findChild(QtWidgets.QLineEdit, 'fu_field')
+        if row:
+            fy, fu = row
+            if fy_field:
+                fy_field.setText(str(fy))
+            if fu_field:
+                fu_field.setText(str(fu))
+        else:
+            if fy_field:
+                fy_field.setText("")
+            if fu_field:
+                fu_field.setText("")
+            QMessageBox.warning(self, "Material Not Found", "Selected material not found in database.")
 
 class Dialog1(QtWidgets.QDialog):
     dialogShown = QtCore.pyqtSignal()

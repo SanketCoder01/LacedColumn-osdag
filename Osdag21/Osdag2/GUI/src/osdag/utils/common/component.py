@@ -1656,8 +1656,133 @@ class Channel(Material):
         self.Iw =  row[21] * 10 ** 6
         self.source = row[22]
         self.type = 'Rolled' if row[23] is None else row[23]
+    
+class BackToBackChannelLaced(Material):
+    def __init__(self, designation, material_grade):
+        self.connect_to_database_update_other_attributes(designation, material_grade)
+        self.profile_type = 'BackToBackChannelLaced'
+        self.rmin = min(self.rad_of_gy_y, self.rad_of_gy_z)
 
+    def connect_to_database_update_other_attributes(self, designation, material_grade):
+        conn = sqlite3.connect(PATH_TO_DATABASE)
+        db_query = "SELECT * FROM Channels WHERE Designation = ?"
+        cur = conn.cursor()
+        cur.execute(db_query, (designation,))
+        row = cur.fetchone()
+        if row is None:
+            conn.close()
+            raise ValueError(f"Section designation '{designation}' not found in Channels database.")
+        self.designation = designation
+        self.mass = row[2]
+        self.area = row[3] * 100
+        self.depth = row[4]
+        self.flange_width = row[5]
+        self.web_thickness = row[6]
+        self.flange_thickness = row[7]
+        max_thickness = max(self.web_thickness, self.flange_thickness)
+        super(BackToBackChannelLaced, self).__init__(material_grade, max_thickness)
+        self.flange_slope = row[8]
+        self.root_radius = row[9]
+        self.toe_radius = row[10]
+        self.Cy = row[11] * 10
+        self.mom_inertia_z = row[12] * 10000
+        self.mom_inertia_y = row[13] * 10000
+        self.rad_of_gy_z = row[14] * 10
+        self.rad_of_gy_y = row[15] * 10
+        self.elast_sec_mod_z = row[16] * 1000
+        self.elast_sec_mod_y = row[17] * 1000
+        self.plast_sec_mod_z = row[18] * 1000
+        self.plast_sec_mod_y = row[19] * 1000
+        self.It = row[20] * 10**4
+        self.Iw = row[21] * 10**6
+        self.source = row[22]
+        self.type = 'Rolled' if row[23] is None else row[23]
         conn.close()
+
+class ToeToToeChannelLaced(Material):
+    def __init__(self, designation, material_grade):
+        self.connect_to_database_update_other_attributes(designation, material_grade)
+        self.profile_type = 'ToeToToeChannelLaced'
+        self.rmin = min(self.rad_of_gy_y, self.rad_of_gy_z)
+
+    def connect_to_database_update_other_attributes(self, designation, material_grade):
+        conn = sqlite3.connect(PATH_TO_DATABASE)
+        db_query = "SELECT * FROM Channels WHERE Designation = ?"
+        cur = conn.cursor()
+        cur.execute(db_query, (designation,))
+        row = cur.fetchone()
+        if row is None:
+            conn.close()
+            raise ValueError(f"Section designation '{designation}' not found in Channels database.")
+        self.designation = designation
+        self.mass = row[2]
+        self.area = row[3] * 100
+        self.depth = row[4]
+        self.flange_width = row[5]
+        self.web_thickness = row[6]
+        self.flange_thickness = row[7]
+        max_thickness = max(self.web_thickness, self.flange_thickness)
+        super(ToeToToeChannelLaced, self).__init__(material_grade, max_thickness)
+        self.flange_slope = row[8]
+        self.root_radius = row[9]
+        self.toe_radius = row[10]
+        self.Cy = row[11] * 10
+        self.mom_inertia_z = row[12] * 10000
+        self.mom_inertia_y = row[13] * 10000
+        self.rad_of_gy_z = row[14] * 10
+        self.rad_of_gy_y = row[15] * 10
+        self.elast_sec_mod_z = row[16] * 1000
+        self.elast_sec_mod_y = row[17] * 1000
+        self.plast_sec_mod_z = row[18] * 1000
+        self.plast_sec_mod_y = row[19] * 1000
+        self.It = row[20] * 10**4
+        self.Iw = row[21] * 10**6
+        self.source = row[22]
+        self.type = 'Rolled' if row[23] is None else row[23]
+        conn.close()
+
+class DoubleGirderLaced(Material):
+    def __init__(self, designation, material_grade):
+        self.connect_to_database_update_other_attributes(designation, material_grade)
+        self.profile_type = 'DoubleGirderLaced'
+        self.rmin = min(self.rad_of_gy_y, self.rad_of_gy_z)
+
+    def connect_to_database_update_other_attributes(self, designation, material_grade):
+        conn = sqlite3.connect(PATH_TO_DATABASE)
+        db_query = "SELECT * FROM Channels WHERE Designation = ?"
+        cur = conn.cursor()
+        cur.execute(db_query, (designation,))
+        row = cur.fetchone()
+        if row is None:
+            conn.close()
+            raise ValueError(f"Section designation '{designation}' not found in Channels database.")
+        self.designation = designation
+        self.mass = row[2]
+        self.area = row[3] * 100
+        self.depth = row[4]
+        self.flange_width = row[5]
+        self.web_thickness = row[6]
+        self.flange_thickness = row[7]
+        max_thickness = max(self.web_thickness, self.flange_thickness)
+        super(DoubleGirderLaced, self).__init__(material_grade, max_thickness)
+        self.flange_slope = row[8]
+        self.root_radius = row[9]
+        self.toe_radius = row[10]
+        self.Cy = row[11] * 10
+        self.mom_inertia_z = row[12] * 10000
+        self.mom_inertia_y = row[13] * 10000
+        self.rad_of_gy_z = row[14] * 10
+        self.rad_of_gy_y = row[15] * 10
+        self.elast_sec_mod_z = row[16] * 1000
+        self.elast_sec_mod_y = row[17] * 1000
+        self.plast_sec_mod_z = row[18] * 1000
+        self.plast_sec_mod_y = row[19] * 1000
+        self.It = row[20] * 10**4
+        self.Iw = row[21] * 10**6
+        self.source = row[22]
+        self.type = 'Rolled' if row[23] is None else row[23]
+        conn.close()
+
 
     def min_plate_height(self):
         return 0.6 * self.depth
@@ -1837,10 +1962,9 @@ class Channel(Material):
     def design_check_for_slenderness(self, K, L, r):
         "KL= effective length of member"
         "r = radius of gyration of member"
-
         slender = (float(K) * float(L)) / float(r)
-
         self.slenderness = round(slender, 2)
+        return self.slenderness
 
     def plastic_moment_capacty(self, beta_b, Z_p, fy):
         gamma_m0 = IS800_2007.cl_5_4_1_Table_5["gamma_m0"]['yielding']

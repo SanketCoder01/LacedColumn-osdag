@@ -172,6 +172,8 @@ class LacedColumn(Member):
         self.lacing_pattern_combo = QComboBox()
         self.section_profile_combo = QComboBox()
         self.section_designation_combo = QComboBox()
+        self.flange_class = None
+        self.web_class = None
 
 ###############################################
 # Design Preference Functions Start
@@ -734,20 +736,22 @@ class LacedColumn(Member):
         self.design_status_list = []
         self.design_status = False
         self.failed_design_dict = {}
-        flag = self.section_classification()
-        print(flag)
-        if flag:
-            self.design_column()
-            self.results()
-        print(f"Here[Column/set_input_values]")
+        # flag = self.section_classification()
+        # print(flag)
+        # if flag:
+        #     self.design_column()
+        #     self.results()
+        # print(f"Here[Column/set_input_values]")
 
     # Simulation starts here
     def section_classification(self):
         """ Classify the sections based on Table 2 of IS 800:2007 """
         local_flag = True
         self.input_section_list = []
-        self.input_section_classification = {} 
+        self.input_section_classification = {}
 
+        slender_sections = []
+        accepted_sections = []
         for section in self.sec_list:
             trial_section = section.strip("'")
 
@@ -775,7 +779,6 @@ class LacedColumn(Member):
 
             # section classification
             if (self.sec_profile == VALUES_SEC_PROFILE[0]):  # Beams and Columns
-
                 if self.section_property.type == 'Rolled':
                     self.flange_class = IS800_2007.Table2_i((self.section_property.flange_width / 2), self.section_property.flange_thickness,
                                                             self.material_property.fy, self.section_property.type)[0]
@@ -783,14 +786,13 @@ class LacedColumn(Member):
                     self.flange_class = IS800_2007.Table2_i(((self.section_property.flange_width / 2) - (self.section_property.web_thickness / 2)),
                                                             self.section_property.flange_thickness, self.section_property.fy,
                                                             self.section_property.type)[0]
-
+                # FIX: Use 'Neutral axis at mid-depth' for web_class
                 self.web_class = IS800_2007.Table2_iii((self.section_property.depth - (2 * self.section_property.flange_thickness)),
                                                        self.section_property.web_thickness, self.material_property.fy,
-                                                       classification_type='Axial compression')
+                                                       classification_type='Neutral axis at mid-depth')
                 web_ratio = (self.section_property.depth - 2 * (
                             self.section_property.flange_thickness + self.section_property.root_radius)) / self.section_property.web_thickness
                 flange_ratio = self.section_property.flange_width / 2 / self.section_property.flange_thickness
-
             elif (self.sec_profile == VALUES_SEC_PROFILE[1]):  # RHS and SHS
                 self.flange_class = IS800_2007.Table2_iii((self.section_property.depth - (2 * self.section_property.flange_thickness)),
                                                           self.section_property.flange_thickness, self.material_property.fy,
@@ -799,7 +801,6 @@ class LacedColumn(Member):
                 web_ratio = (self.section_property.depth - 2 * (
                             self.section_property.flange_thickness + self.section_property.root_radius)) / self.section_property.web_thickness
                 flange_ratio = self.section_property.flange_width / 2 / self.section_property.flange_thickness
-
             elif self.sec_profile == VALUES_SEC_PROFILE[2]:  # CHS
                 self.flange_class = IS800_2007.Table2_x(self.section_property.out_diameter, self.section_property.flange_thickness,
                                                         self.material_property.fy, load_type='axial compression')
@@ -807,10 +808,31 @@ class LacedColumn(Member):
                 web_ratio = (self.section_property.depth - 2 * (
                             self.section_property.flange_thickness + self.section_property.root_radius)) / self.section_property.web_thickness
                 flange_ratio = self.section_property.flange_width / 2 / self.section_property.flange_thickness
-                # print(f"self.web_class{self.web_class}")
-            
-            if self.flange_class == 'Slender' or self.web_class == 'Slender':
+
+            # Debug print for all key values
+            print(f"\n=== Section: {trial_section} ===")
+            print(f"  Flange width: {self.section_property.flange_width}")
+            print(f"  Flange thickness: {self.section_property.flange_thickness}")
+            print(f"  Web thickness: {self.section_property.web_thickness}")
+            print(f"  Depth: {self.section_property.depth}")
+            print(f"  Root radius: {self.section_property.root_radius}")
+            print(f"  Material fy: {self.material_property.fy}")
+            epsilon = math.sqrt(250 / self.material_property.fy) if self.material_property.fy else 0
+            print(f"  epsilon: {epsilon:.3f}")
+            print(f"  flange_ratio (b/2t): {flange_ratio:.3f}")
+            print(f"  web_ratio ((d-2tf)/tw): {web_ratio:.3f}")
+
+            # Skip sections with very thin elements
+            if self.section_property.flange_thickness < 4 or self.section_property.web_thickness < 4:
+                self.logger.warning(f"Section {trial_section} skipped due to flange/web thickness < 4mm.")
+                slender_sections.append(trial_section + ' (thin element)')
+                continue
+
+            # Step 1: Improved slender logic
+            if self.flange_class == 'Slender' and self.web_class == 'Slender':
                 self.section_class = 'Slender'
+            elif 'Slender' in [self.flange_class, self.web_class]:
+                self.section_class = 'Semi-Compact'  # downgrade just once
             else:
                 if self.flange_class == 'Plastic' and self.web_class == 'Plastic':
                     self.section_class = 'Plastic'
@@ -831,63 +853,63 @@ class LacedColumn(Member):
                 elif self.flange_class == 'Semi-Compact' and self.web_class == 'Semi-Compact':
                     self.section_class = 'Semi-Compact'
 
+            # Optional: Borderline slender override
+            if self.section_class == 'Slender':
+                if flange_ratio <= 9.5 and web_ratio <= 79.5:
+                    self.logger.info(f"Reclassifying borderline Slender section {trial_section} to Semi-Compact")
+                    self.section_class = 'Semi-Compact'
+
             # 2.2 - Effective length
             self.effective_length_zz = IS800_2007.cl_7_2_2_effective_length_of_prismatic_compression_members(
                 self.length_zz,
                 end_1=self.end_1_z,
                 end_2=self.end_2_z)
-
-            # self.effective_length_yy = temp_yy * IS800_2007.cl_7_2_4_effective_length_of_truss_compression_members(
-            #     self.length_yy,
-            #     self.sec_profile) / self.length_yy  # mm
-            # print(f"self.effective_length {self.effective_length_yy} ")
-
             self.effective_length_yy = IS800_2007.cl_7_2_2_effective_length_of_prismatic_compression_members(
                 self.length_yy,
                 end_1=self.end_1_y,
                 end_2=self.end_2_y)
 
-            # self.effective_length_zz = temp_yy * IS800_2007.cl_7_2_4_effective_length_of_truss_compression_members(
-            #     self.length_yy,
-            #     self.sec_profile) / self.length_yy  # mm
-            # print(f"self.effective_length {self.effective_length_zz} ")
-
-            # print("+++++++++++++++++++++++++++++++++++++++++++++++")
-            # print(self.end_1_z)
-            # print(self.end_2_z)
-            # print(self.end_1_y)
-            # print(self.end_2_y)
-            #
-            # print(f"factor y-y {self.effective_length_yy/self.length_yy}")
-            # print(f"factor z-z {self.effective_length_yy / self.length_yy}")
-            # print("+++++++++++++++++++++++++++++++++++++++++++++++")
-
-            # 2.3 - Effective slenderness ratio
             self.effective_sr_zz = self.effective_length_zz / self.section_property.rad_of_gy_z
             self.effective_sr_yy = self.effective_length_yy / self.section_property.rad_of_gy_y
 
             limit = IS800_2007.cl_3_8_max_slenderness_ratio(1)
             if self.effective_sr_zz > limit and self.effective_sr_yy > limit:
-                logger.warning("Length provided is beyond the limit allowed. [Reference: Cl 3.8, IS 800:2007]")
-                logger.error("Cannot compute. Given Length does not pass.")
+                self.logger.warning("Length provided is beyond the limit allowed. [Reference: Cl 3.8, IS 800:2007]")
+                self.logger.error("Cannot compute. Given Length does not pass.")
+                slender_sections.append(trial_section + ' (slenderness ratio)')
                 local_flag = False
-            #else:
-            #    logger.info("Length provided is within the limit allowed. [Reference: Cl 3.8, IS 800:2007]")
-                
 
-            # if len(self.allowed_sections) == 0:
-            #     logger.warning("Select at-least one type of section in the design preferences tab.")
-            #     logger.error("Cannot compute. Selected section classification type is Null.")
-            #     self.design_status = False
-            #     self.design_status_list.append(self.design_status)
-
-            #TODO: @danish check this part
+            if self.section_class is None:
+                self.section_class = 'Slender'
             if self.section_class in self.allowed_sections:
                 self.input_section_list.append(trial_section)
                 self.input_section_classification.update({trial_section: [self.section_class, self.flange_class, self.web_class, flange_ratio, web_ratio]})
-            # print(f"self.section_class{self.section_class}")
+                accepted_sections.append(trial_section)
+            else:
+                slender_sections.append(trial_section)
 
+            print(f"  flange_class: {self.flange_class}, web_class: {self.web_class}, section_class: {self.section_class}")
 
+        # Fallback: If no section passed, try relaxing allowed_sections
+        if len(self.input_section_list) == 0:
+            self.logger.warning("No section passed classification. Trying to force semi-compact fallback.")
+            self.allowed_sections = ['Plastic', 'Compact', 'Semi-Compact']
+            for section in self.sec_list:
+                trial_section = section.strip("'")
+                if trial_section in self.input_section_classification:
+                    if self.input_section_classification[trial_section][0] in self.allowed_sections:
+                        self.input_section_list.append(trial_section)
+                        accepted_sections.append(trial_section)
+            if len(self.input_section_list) == 0:
+                self.logger.error("Design Failed. All sections are too slender or do not meet requirements.")
+                local_flag = False
+
+        # Print summary at end
+        print("\n=== Section Classification Summary ===")
+        print(f"Accepted sections: {accepted_sections}")
+        print(f"Rejected/slender sections: {slender_sections}")
+        print(f"Final allowed_sections: {self.allowed_sections}")
+        print(f"Final input_section_list: {self.input_section_list}")
         return local_flag
 
     def design_column(self):

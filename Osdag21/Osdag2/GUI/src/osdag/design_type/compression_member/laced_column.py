@@ -375,18 +375,17 @@ class LacedColumn(Member):
     def module_name(self):
         return KEY_DISP_COMPRESSION_COLUMN
 
-    def set_osdaglogger(widget_or_key=None):
+    def set_osdaglogger(self, widget_or_key=None):
         import logging
-        global logger
-        logger = logging.getLogger('Osdag')
-        logger.setLevel(logging.DEBUG)
+        self.logger = logging.getLogger('Osdag')
+        self.logger.setLevel(logging.DEBUG)
         handler = logging.StreamHandler()
         formatter = logging.Formatter(fmt='%(asctime)s - %(name)s - %(levelname)s - %(message)s', datefmt='%Y-%m-%d %H:%M:%S')
         handler.setFormatter(formatter)
-        logger.addHandler(handler)
+        self.logger.addHandler(handler)
         handler = logging.FileHandler('logging_text.log')
         handler.setFormatter(formatter)
-        logger.addHandler(handler)
+        self.logger.addHandler(handler)
         # Add QTextEdit logger if widget is provided
         if widget_or_key is not None and hasattr(widget_or_key, 'append'):
             class QTextEditLogger(logging.Handler):
@@ -398,12 +397,12 @@ class LacedColumn(Member):
                     self.text_edit.append(msg)
             qtext_handler = QTextEditLogger(widget_or_key)
             qtext_handler.setFormatter(formatter)
-            logger.addHandler(qtext_handler)
+            self.logger.addHandler(qtext_handler)
         elif widget_or_key is not None:
             # If it's a key, use your existing OurLog logic
             handler = OurLog(widget_or_key)
             handler.setFormatter(formatter)
-            logger.addHandler(handler)
+            self.logger.addHandler(handler)
 
     def customized_input(self, *args, **kwargs):
         c_lst = []
@@ -600,13 +599,13 @@ class LacedColumn(Member):
         flag = False
         option_list = self.input_values()
         missing_fields_list = []
-        #print(f'func_for_validation option_list {option_list}')
+        # Only check required fields; do not require 'Type of Connection' or 'Lacing Pattern'
         for option in option_list:
             if option[2] == TYPE_TEXTBOX:
                 if design_dictionary[option[0]] == '':
                     missing_fields_list.append(option[1])
                     print(option[1], option[2], option[0], design_dictionary[option[0]])
-            elif option[2] == TYPE_COMBOBOX and option[0] not in [KEY_SEC_PROFILE, KEY_END_COND_YY_1, KEY_END_COND_YY_2, KEY_END_COND_ZZ_1, KEY_END_COND_ZZ_2]:
+            elif option[2] == TYPE_COMBOBOX and option[0] not in [KEY_SEC_PROFILE, KEY_END_COND_YY_1, KEY_END_COND_YY_2, KEY_END_COND_ZZ_1, KEY_END_COND_ZZ_2, KEY_CONN_TYPE, KEY_LACING_PATTERN]:
                 val = option[3]
                 if design_dictionary[option[0]] == val[0]:
                     missing_fields_list.append(option[1])
@@ -623,7 +622,7 @@ class LacedColumn(Member):
         if flag:
             print(f"\n design_dictionary{design_dictionary}")
             self.set_input_values(design_dictionary)
-            if self.design_status ==False and len(self.failed_design_dict)>0:
+            if self.design_status ==False and self.failed_design_dict is not None and len(self.failed_design_dict)>0:
                 logger.error(
                     "Design Failed, Check Design Report"
                 )
@@ -665,7 +664,7 @@ class LacedColumn(Member):
         self.module = design_dictionary.get(KEY_DISP_LACEDCOL, "")
         self.mainmodule = 'Columns with known support conditions'
         self.sec_profile = design_dictionary.get(KEY_LACEDCOL_SEC_PROFILE, "")
-        self.sec_list = design_dictionary.get(KEY_LACEDCOL_SEC_SIZE, [])
+        self.sec_list = design_dictionary.get(KEY_SECSIZE, [])
         self.material = design_dictionary.get(KEY_SEC_MATERIAL, "")
 
         # section user data
@@ -1161,7 +1160,39 @@ class LacedColumn(Member):
             # print(f"design_status_list{self.design_status_list}")
 
     def results(self):
-        """ """
+        # Prevent duplicate logs in a single calculation
+        if hasattr(self, '_already_logged_failure'):
+            del self._already_logged_failure
+
+        if not self.optimum_section_ur:
+            self.logger.error("No sections available for design. Please check your input or section list.")
+            self.design_status = False
+            self.failed_design_dict = {}
+            return
+
+        if len(self.optimum_section_ur) == 0:  # no design was successful
+            if not hasattr(self, '_already_logged_failure'):
+                self._already_logged_failure = True
+                self.logger.warning("The sections selected by the solver from the defined list of sections did not satisfy the Utilization Ratio (UR) criteria")
+                self.logger.error("The solver did not find any adequate section from the defined list.")
+                self.logger.info("Re-define the list of sections or check the Design Preferences option and re-design.")
+            self.design_status = False
+            if self.failed_design_dict is None or not isinstance(self.failed_design_dict, dict):
+                self.failed_design_dict = {}
+            if self.failed_design_dict and isinstance(self.failed_design_dict, dict) and len(self.failed_design_dict) > 0:
+                self.logger.info("The details for the best section provided is being shown")
+                self.result_UR = self.failed_design_dict.get('UR', None)
+                self.common_result(
+                    self,
+                    list_result=self.failed_design_dict,
+                    result_type=None,
+                )
+                self.logger.warning("Re-define the list of sections or check the Design Preferences option and re-design.")
+                return
+            else:
+                self.failed_design_dict = {}  # Always a dict for downstream code
+            return
+
         _ = [i for i in self.optimum_section_ur if i > 1.0]
         print( '_ ',_)
         if len(_)==1:
@@ -1185,12 +1216,12 @@ class LacedColumn(Member):
 
             # selecting the section with most optimum UR
             if len(self.optimum_section_ur) == 0:  # no design was successful
-                logger.warning("The sections selected by the solver from the defined list of sections did not satisfy the Utilization Ratio (UR) criteria")
-                logger.error("The solver did not find any adequate section from the defined list.")
-                logger.info("Re-define the list of sections or check the Design Preferences option and re-design.")
+                self.logger.warning("The sections selected by the solver from the defined list of sections did not satisfy the Utilization Ratio (UR) criteria")
+                self.logger.error("The solver did not find any adequate section from the defined list.")
+                self.logger.info("Re-define the list of sections or check the Design Preferences option and re-design.")
                 self.design_status = False
                 if self.failed_design_dict and isinstance(self.failed_design_dict, dict) and len(self.failed_design_dict) > 0:
-                    logger.info(
+                    self.logger.info(
                     "The details for the best section provided is being shown"
                 )
                     self.result_UR = self.failed_design_dict.get('UR', None) #temp  
@@ -1199,7 +1230,7 @@ class LacedColumn(Member):
                         list_result=self.failed_design_dict,
                         result_type=None,
                     )
-                    logger.warning(
+                    self.logger.warning(
                     "Re-define the list of sections or check the Design Preferences option and re-design."
                 )
                     return
@@ -1360,13 +1391,13 @@ class LacedColumn(Member):
                 self.design_status = True
 
         if self.design_status:
-            logger.info(": ========== Design Status ============")
-            logger.info(": Overall Column design is SAFE")
-            logger.info(": ========== End Of Design ============")
+            self.logger.info(": ========== Design Status ============")
+            self.logger.info(": Overall Column design is SAFE")
+            self.logger.info(": ========== End Of Design ============")
         else:
-            logger.info(": ========== Design Status ============")
-            logger.info(": Overall Column design is UNSAFE")
-            logger.info(": ========== End Of Design ============")
+            self.logger.info(": ========== Design Status ============")
+            self.logger.info(": Overall Column design is UNSAFE")
+            self.logger.info(": ========== End Of Design ============")
 
     ### start writing save_design from here!
     """def save_design(self, popup_summary):
@@ -1385,67 +1416,134 @@ class LacedColumn(Member):
                 select_section_img = "Parallel_Beam" """
     
     def common_result(self, list_result, result_type):
-        
-        self.result_designation = list_result[result_type]['Designation']
-        self.section_class = self.input_section_classification[self.result_designation][0]
+        # Defensive: handle None or wrong type for list_result
+        if not isinstance(list_result, dict) or not list_result:
+            self.logger.error("No valid results to display. Calculation did not yield any results.")
+            # Set all result attributes to None or a safe default
+            self.result_designation = None
+            self.section_class = None
+            self.result_section_class = None
+            self.result_effective_area = None
+            self.result_bc_zz = None
+            self.result_bc_yy = None
+            self.result_IF_zz = None
+            self.result_IF_yy = None
+            self.result_eff_len_zz = None
+            self.result_eff_len_yy = None
+            self.result_eff_sr_zz = None
+            self.result_eff_sr_yy = None
+            self.result_ebs_zz = None
+            self.result_ebs_yy = None
+            self.result_nd_esr_zz = None
+            self.result_nd_esr_yy = None
+            self.result_phi_zz = None
+            self.result_phi_yy = None
+            self.result_srf_zz = None
+            self.result_srf_yy = None
+            self.result_fcd_1_zz = None
+            self.result_fcd_1_yy = None
+            self.result_fcd_2 = None
+            self.result_fcd_zz = None
+            self.result_fcd_yy = None
+            self.result_fcd = None
+            self.result_capacity = None
+            self.result_cost = None
+            return
 
-        if self.section_class == 'Slender':
-            logger.warning("The trial section ({}) is Slender. Computing the Effective Sectional Area as per Sec. 9.7.2, "
-                        "Fig. 2 (B & C) of The National Building Code of India (NBC), 2016.".format(self.result_designation))
-        if self.effective_area_factor < 1.0:
-            self.effective_area = round(self.effective_area * self.effective_area_factor, 2)
+        # Defensive: handle None or missing result_type
+        if result_type is None:
+            # Try to get the first key if possible
+            if list_result:
+                result_type = next(iter(list_result.keys()))
+            else:
+                self.logger.error("No result type found in results.")
+                return
 
-            logger.warning("Reducing the effective sectional area as per the definition in the Design Preferences tab.")
-            logger.info("The actual effective area is {} mm2 and the reduced effective area is {} mm2 [Reference: Cl. 7.3.2, IS 800:2007]".
-                        format(round((self.effective_area / self.effective_area_factor), 2), self.effective_area))
-        else:
-            if self.section_class != 'Slender':
-                logger.info("The effective sectional area is taken as 100% of the cross-sectional area [Reference: Cl. 7.3.2, IS 800:2007].")
-        logger.info(
-            "The section is {}. The {} section  has  {} flange({}) and  {} web({}).  [Reference: Cl 3.7, IS 800:2007].".format(
-                self.input_section_classification[self.result_designation][0] ,
-                self.result_designation,
-                self.input_section_classification[self.result_designation][1], round(self.input_section_classification[self.result_designation][3],2),
-                self.input_section_classification[self.result_designation][2], round(self.input_section_classification[self.result_designation][4],2)
-            ))
-        
-        self.result_section_class = list_result[result_type]['Section class']
-        self.result_effective_area = list_result[result_type]['Effective area']
-       
-        self.result_bc_zz = list_result[result_type]['Buckling_curve_zz'] 
-        self.result_bc_yy = list_result[result_type]['Buckling_curve_yy']
-    
-        self.result_IF_zz = list_result[result_type]['IF_zz']
-        self.result_IF_yy = list_result[result_type]['IF_yy']
-        
-        self.result_eff_len_zz = list_result[result_type]['Effective_length_zz']
-        self.result_eff_len_yy = list_result[result_type]['Effective_length_yy']
-    
-        self.result_eff_sr_zz = list_result[result_type]['Effective_SR_zz']
-        self.result_eff_sr_yy = list_result[result_type]['Effective_SR_yy']
-        
-        self.result_ebs_zz = list_result[result_type]['EBS_zz']
-        self.result_ebs_yy = list_result[result_type]['EBS_yy']
-    
-        self.result_nd_esr_zz = list_result[result_type]['ND_ESR_zz']
-        self.result_nd_esr_yy = list_result[result_type]['ND_ESR_yy']
-        
-        self.result_phi_zz = list_result[result_type]['phi_zz']
-        self.result_phi_yy = list_result[result_type]['phi_yy']
-        
-        self.result_srf_zz = list_result[result_type]['SRF_zz']
-        self.result_srf_yy = list_result[result_type]['SRF_yy']
-  
-        self.result_fcd_1_zz = list_result[result_type]['FCD_1_zz']
-        self.result_fcd_1_yy = list_result[result_type]['FCD_1_yy']
-        self.result_fcd_2 = list_result[result_type]['FCD_2']
-        self.result_fcd_zz = list_result[result_type]['FCD_zz']
-        self.result_fcd_yy = list_result[result_type]['FCD_yy']
-        self.result_fcd = list_result[result_type]['FCD']
+        # Defensive: check if result_type exists in list_result
+        if result_type not in list_result:
+            self.logger.error(f"Result type '{result_type}' not found in results.")
+            return
 
-        self.result_capacity = list_result[result_type]['Capacity']
-        self.result_cost = list_result[result_type]['Cost']
-        
+        # Now safe to access
+        try:
+            self.result_designation = list_result[result_type].get('Designation', None)
+            self.section_class = self.input_section_classification.get(self.result_designation, [None])[0]
+
+            if self.section_class == 'Slender':
+                self.logger.warning(f"The trial section ({self.result_designation}) is Slender. Computing the Effective Sectional Area as per Sec. 9.7.2, Fig. 2 (B & C) of The National Building Code of India (NBC), 2016.")
+            if getattr(self, 'effective_area_factor', 1.0) < 1.0:
+                self.effective_area = round(self.effective_area * self.effective_area_factor, 2)
+                self.logger.warning("Reducing the effective sectional area as per the definition in the Design Preferences tab.")
+                self.logger.info(f"The actual effective area is {round((self.effective_area / self.effective_area_factor), 2)} mm2 and the reduced effective area is {self.effective_area} mm2 [Reference: Cl. 7.3.2, IS 800:2007]")
+            else:
+                if self.section_class != 'Slender':
+                    self.logger.info("The effective sectional area is taken as 100% of the cross-sectional area [Reference: Cl. 7.3.2, IS 800:2007].")
+            if self.result_designation in self.input_section_classification:
+                self.logger.info(
+                    "The section is {}. The {} section  has  {} flange({}) and  {} web({}).  [Reference: Cl 3.7, IS 800:2007].".format(
+                        self.input_section_classification[self.result_designation][0],
+                        self.result_designation,
+                        self.input_section_classification[self.result_designation][1], round(self.input_section_classification[self.result_designation][3],2),
+                        self.input_section_classification[self.result_designation][2], round(self.input_section_classification[self.result_designation][4],2)
+                    ))
+
+            self.result_section_class = list_result[result_type].get('Section class', None)
+            self.result_effective_area = list_result[result_type].get('Effective area', None)
+            self.result_bc_zz = list_result[result_type].get('Buckling_curve_zz', None)
+            self.result_bc_yy = list_result[result_type].get('Buckling_curve_yy', None)
+            self.result_IF_zz = list_result[result_type].get('IF_zz', None)
+            self.result_IF_yy = list_result[result_type].get('IF_yy', None)
+            self.result_eff_len_zz = list_result[result_type].get('Effective_length_zz', None)
+            self.result_eff_len_yy = list_result[result_type].get('Effective_length_yy', None)
+            self.result_eff_sr_zz = list_result[result_type].get('Effective_SR_zz', None)
+            self.result_eff_sr_yy = list_result[result_type].get('Effective_SR_yy', None)
+            self.result_ebs_zz = list_result[result_type].get('EBS_zz', None)
+            self.result_ebs_yy = list_result[result_type].get('EBS_yy', None)
+            self.result_nd_esr_zz = list_result[result_type].get('ND_ESR_zz', None)
+            self.result_nd_esr_yy = list_result[result_type].get('ND_ESR_yy', None)
+            self.result_phi_zz = list_result[result_type].get('phi_zz', None)
+            self.result_phi_yy = list_result[result_type].get('phi_yy', None)
+            self.result_srf_zz = list_result[result_type].get('SRF_zz', None)
+            self.result_srf_yy = list_result[result_type].get('SRF_yy', None)
+            self.result_fcd_1_zz = list_result[result_type].get('FCD_1_zz', None)
+            self.result_fcd_1_yy = list_result[result_type].get('FCD_1_yy', None)
+            self.result_fcd_2 = list_result[result_type].get('FCD_2', None)
+            self.result_fcd_zz = list_result[result_type].get('FCD_zz', None)
+            self.result_fcd_yy = list_result[result_type].get('FCD_yy', None)
+            self.result_fcd = list_result[result_type].get('FCD', None)
+            self.result_capacity = list_result[result_type].get('Capacity', None)
+            self.result_cost = list_result[result_type].get('Cost', None)
+        except Exception as e:
+            self.logger.error(f"Error extracting results: {e}")
+            # Set all result attributes to None or a safe default
+            self.result_designation = None
+            self.section_class = None
+            self.result_section_class = None
+            self.result_effective_area = None
+            self.result_bc_zz = None
+            self.result_bc_yy = None
+            self.result_IF_zz = None
+            self.result_IF_yy = None
+            self.result_eff_len_zz = None
+            self.result_eff_len_yy = None
+            self.result_eff_sr_zz = None
+            self.result_eff_sr_yy = None
+            self.result_ebs_zz = None
+            self.result_ebs_yy = None
+            self.result_nd_esr_zz = None
+            self.result_nd_esr_yy = None
+            self.result_phi_zz = None
+            self.result_phi_yy = None
+            self.result_srf_zz = None
+            self.result_srf_yy = None
+            self.result_fcd_1_zz = None
+            self.result_fcd_1_yy = None
+            self.result_fcd_2 = None
+            self.result_fcd_zz = None
+            self.result_fcd_yy = None
+            self.result_fcd = None
+            self.result_capacity = None
+            self.result_cost = None
 
     def save_design(self, popup_summary):
 

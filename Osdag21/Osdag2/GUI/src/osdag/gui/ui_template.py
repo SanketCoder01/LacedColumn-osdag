@@ -4,12 +4,9 @@ import shutil
 import time
 import pandas as pd
 from PyQt5 import QtCore, QtGui, QtWidgets
-from PyQt5.QtGui import QPixmap, QFont, QIcon
-from PyQt5.QtWidgets import (QDialog, QMainWindow, QMessageBox, QWidget, 
-                           QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
-                           QScrollArea, QFrame, QSizePolicy, QApplication,
-                           QDesktopWidget, QFileDialog, QProgressBar)
-from PyQt5.QtCore import Qt, QSize, pyqtSignal, QThread, QEvent
+from PyQt5.QtGui import *
+from PyQt5.QtWidgets import *
+from PyQt5.QtCore import *
 from .ui_tutorial import Ui_Tutorial
 from .ui_aboutosdag import Ui_AboutOsdag
 from .ui_ask_question import Ui_AskQuestion
@@ -49,7 +46,6 @@ from ..design_type.connection.beam_beam_end_plate_splice import BeamBeamEndPlate
 from ..design_type.connection.column_end_plate import ColumnEndPlate
 from ..design_type.connection.column_cover_plate_weld import ColumnCoverPlateWeld
 from ..design_type.connection.base_plate_connection import BasePlateConnection
-from ..design_type.connection.lap_joint_bolted import LapJointBolted
 from ..design_type.tension_member.tension_bolted import Tension_bolted
 from ..design_type.tension_member.tension_welded import Tension_welded
 from ..design_type.connection.beam_column_end_plate import BeamColumnEndPlate
@@ -64,8 +60,6 @@ import subprocess
 from ..get_DPI_scale import scale,height,width
 from ..cad.cad3dconnection import cadconnection
 from pynput.mouse import Button, Controller
-from osdag.gui.UI_DESIGN_PREFERENCE import Ui_Form
-import sqlite3
 
 class MyTutorials(QDialog):
     def __init__(self, parent=None):
@@ -339,51 +333,28 @@ class Window(QMainWindow):
             return None
 
     def start_loadingWindow(self, main, data):
-        loading_widget = QWidget()
-        loading_widget.setWindowFlags(Qt.Window | Qt.FramelessWindowHint)
-        loading_widget.setAttribute(Qt.WA_TranslucentBackground)
-        loading_widget.setFixedSize(400, 200)
+        loading_widget = QDialog(self)
+        window_width = self.width() // 2
+        window_height = self.height() // 10
+        loading_widget.setFixedSize(window_width, int(1.5 * window_height))
+        loading_widget.setWindowFlag(Qt.FramelessWindowHint)
 
-        layout = QVBoxLayout(loading_widget)
-        layout.setContentsMargins(0, 0, 0, 0)
-
-        # Create progress bar
         self.progress_bar = QProgressBar(loading_widget)
-        self.progress_bar.setFixedSize(300, 20)
-        self.progress_bar.setRange(0, 100)
-        self.progress_bar.setValue(0)
-        self.progress_bar.setTextVisible(True)
-        self.progress_bar.setFormat("%p%")
-        self.progress_bar.setAlignment(Qt.AlignCenter)
-
-        # Add loading label
+        self.progress_bar.setMaximum(100)
+        self.progress_bar.setGeometry(QRect(0, 0, window_width, window_height // 2))
         loading_label = QLabel(loading_widget)
+        loading_label.setGeometry(QRect(0, window_height // 2, window_width, window_height))
+        loading_label.setFixedSize(window_width, window_height)
         loading_label.setAlignment(Qt.AlignCenter)
         loading_label.setText("<p style='font-weight:500'>Please Wait...</p>")
-
-        # Add widgets to layout
-        layout.addWidget(self.progress_bar, alignment=Qt.AlignCenter)
-        layout.addWidget(loading_label, alignment=Qt.AlignCenter)
-
-        # Center the window
-        screen = QApplication.desktop().screenNumber(QApplication.desktop().cursor().pos())
-        center = QApplication.desktop().screenGeometry(screen).center()
-        loading_widget.move(center.x() - loading_widget.width() // 2,
-                          center.y() - loading_widget.height() // 2)
-
-        # Start threads for progress
         self.thread_1 = DummyThread(0.00001, self)
         self.thread_1.start()
         self.thread_2 = DummyThread(0.00001, self)
-        
-        # Connect thread signals
-        self.thread_1.finished.connect(lambda: loading_widget.show())
+        self.thread_1.finished.connect(lambda: loading_widget.exec())
         self.thread_1.finished.connect(lambda: self.progress_bar.setValue(10))
         self.thread_1.finished.connect(lambda: self.thread_2.start())
         self.thread_2.finished.connect(lambda: self.common_function_for_save_and_design(main, data, "Design"))
         self.thread_2.finished.connect(lambda: loading_widget.close())
-
-        return loading_widget
 
     def setupUi(self, MainWindow, main,folder):
         #Font is declared here for calculating fontmetrics. This wont assign font to widgets
@@ -469,7 +440,7 @@ class Window(QMainWindow):
             To get 3d component checkbox details from modules
         """
         i = 0
-        for component in main.get_3d_components():
+        for component in main.get_3d_components(main):
             checkBox = QtWidgets.QCheckBox(self.frame)
             checkBox.setGeometry(QtCore.QRect(230 + i, 0, 110, 29))
             checkBox.setFocusPolicy(QtCore.Qt.TabFocus)
@@ -516,7 +487,13 @@ class Window(QMainWindow):
         self.splitter.addWidget(self.textEdit)
         self.splitter.setStretchFactor(1, 1)
 
-        main.set_osdaglogger(self.textEdit)
+        try:
+            main.set_osdaglogger(self.textEdit)
+        except (TypeError, AttributeError):
+            try:
+                main.set_osdaglogger(None)
+            except Exception:
+                pass
         # self.textEdit.setStyleSheet("QTextEdit {color:red}")
         self.verticalLayout_2.addWidget(self.splitter)
         MainWindow.setCentralWidget(self.centralwidget)
@@ -591,7 +568,7 @@ class Window(QMainWindow):
         in_scroll.setHorizontalScrollBarPolicy(QtCore.Qt.ScrollBarAlwaysOff)
         in_scroll.setVerticalScrollBarPolicy(QtCore.Qt.ScrollBarAsNeeded)
 
-        input_dp_conn_list = main.input_dictionary_without_design_pref()
+        input_dp_conn_list = main.input_dictionary_without_design_pref(main)
         input_dp_conn_list = [i[0] for i in input_dp_conn_list if i[2] == "Input Dock"]
         print(f'input_dp_conn_list {input_dp_conn_list}')
 
@@ -602,6 +579,7 @@ class Window(QMainWindow):
         """
         option_list = main.input_values(self)
         print(f'setupui option_list {option_list}')
+
         _translate = QtCore.QCoreApplication.translate
 
         i = 0
@@ -610,9 +588,9 @@ class Window(QMainWindow):
         for option in option_list:
             lable = option[1]
             type = option[2]
-            if type not in [TYPE_TITLE, TYPE_IMAGE, TYPE_MODULE, TYPE_IMAGE_COMPRESSION,TYPE_IMAGE_BIGGER]:
+            if type not in [TYPE_TITLE, TYPE_IMAGE, TYPE_MODULE, TYPE_IMAGE_COMPRESSION]:
                 l = QtWidgets.QLabel(self.dockWidgetContents)
-                l.setObjectName(option[0] + "_label")
+                l.setObjectName((str(option[0]) if option[0] is not None else f"label_{j}") + "_label")
                 l.setText(_translate("MainWindow", "<html><head/><body><p>" + lable + "</p></body></html>"))
                 #l.setFixedSize(l.size())
                 in_layout2.addWidget(l, j, 1, 1, 1)
@@ -635,8 +613,8 @@ class Window(QMainWindow):
                 item_width = 10
                 # max_width=""
                 # count = 0
-                for item in option[3]:
-
+                current_list_set = set(option[3]) if (option[3] is not None and hasattr(option[3], '__iter__')) else set()
+                for item in current_list_set:
                     combo.addItem(item)
                     # if count ==0:
                     #     max_width = item
@@ -780,17 +758,6 @@ class Window(QMainWindow):
                 i = i + 30
                 im.setFixedSize(im.size())
                 in_layout2.addWidget(im, j, 2, 1, 1)
-            
-            if type == TYPE_IMAGE_BIGGER:
-                im = QtWidgets.QLabel(self.dockWidgetContents)
-                im.setGeometry(QtCore.QRect(190, 10 + i, 420, 400))
-                im.setObjectName(option[0])
-                im.setScaledContents(True)
-                pixmap = QPixmap(option[3])
-                im.setPixmap(pixmap)
-                i = i + 30
-                im.setFixedSize(im.size())
-                in_layout2.addWidget(im, j, 1, 1, 1)
 
             if type == TYPE_IMAGE_COMPRESSION:
                 imc = QtWidgets.QLabel(self.dockWidgetContents)
@@ -850,8 +817,8 @@ class Window(QMainWindow):
          "triggered.connect" for up to 10 customized popups
         """
 
-        new_list = main.customized_input()
-        updated_list = main.input_value_changed()  # Remove main argument
+        new_list = main.customized_input(main)
+        updated_list = main.input_value_changed(main)
         print(f'\n ui_template.py input_value_changed {updated_list} \n new_list {new_list}')
         data = {}
 
@@ -869,139 +836,55 @@ class Window(QMainWindow):
                     if onchange_key_popup != []:
                         for change_key in onchange_key_popup[0][0]:
                             print(change_key)
-                            widget = self.dockWidgetContents.findChild(QtWidgets.QWidget, change_key)
-
-                            if widget is None:
-                                print(f"[ERROR] UI widget not found for key: {change_key}")
-                                arg_list.append("")  # Append empty string or handle as needed
-                            elif hasattr(widget, "currentText"):
-                                arg_list.append(widget.currentText())
-                            else:
-                                print(f"[ERROR] Widget for key '{change_key}' does not support currentText().")
-                                arg_list.append("")
-
-                        # After safe arg_list update
-                        if arg_list:
-                            data[t[0] + "_customized"] = [
-                                all_values_available for all_values_available in t[1](arg_list)
-                                if all_values_available not in disabled_values
-                            ]
-                        else:
-                            data[t[0] + "_customized"] = [
-                                all_values_available for all_values_available in t[1]()
-                                if all_values_available not in disabled_values
-                            ]
-
+                            arg_list.append(self.dockWidgetContents.findChild(QtWidgets.QWidget, change_key).currentText())
+                        # Robust: try unpacked, else fallback to single argument
                         try:
-                            print(f"<class 'AttributeError'>: {d} \n {new_list}")
-                            # Connect signals only if the corresponding elements exist in new_list
-                            for i in range(len(new_list)):
-                                widget = d.get(new_list[i][0])
-                                if widget is not None:
-                                    try:
-                                        # Store the widget reference in a closure to avoid lambda capture issues
-                                        def create_popup_handler(w, idx):
-                                            def handler():
-                                                try:
-                                                    # Get the current value from the widget
-                                                    current_value = w.currentText() if hasattr(w, 'currentText') else w.text()
-                                                    
-                                                    # Create a dialog to show database values
-                                                    dialog = QtWidgets.QDialog(self)
-                                                    dialog.setWindowTitle("Select Value")
-                                                    dialog.setModal(True)
-                                                    
-                                                    # Create layout
-                                                    layout = QtWidgets.QVBoxLayout(dialog)
-                                                    
-                                                    # Add a table to show database values
-                                                    table = QtWidgets.QTableWidget()
-                                                    table.setColumnCount(2)
-                                                    table.setHorizontalHeaderLabels(["Value", "Description"])
-                                                    
-                                                    # Connect to database and fetch values
-                                                    try:
-                                                        conn = sqlite3.connect('osdag.db')
-                                                        cursor = conn.cursor()
-                                                        cursor.execute("SELECT value, description FROM values_table WHERE type = ?", (new_list[idx][0],))
-                                                        values = cursor.fetchall()
-                                                        
-                                                        # Populate table
-                                                        table.setRowCount(len(values))
-                                                        for row, (value, desc) in enumerate(values):
-                                                            table.setItem(row, 0, QtWidgets.QTableWidgetItem(str(value)))
-                                                            table.setItem(row, 1, QtWidgets.QTableWidgetItem(str(desc)))
-                                                        
-                                                        conn.close()
-                                                    except Exception as db_error:
-                                                        print(f"Database error: {str(db_error)}")
-                                                        # Add default values if database fails
-                                                        table.setRowCount(1)
-                                                        table.setItem(0, 0, QtWidgets.QTableWidgetItem(current_value))
-                                                        table.setItem(0, 1, QtWidgets.QTableWidgetItem("Current Value"))
-                                                    
-                                                    layout.addWidget(table)
-                                                    
-                                                    # Add buttons
-                                                    button_box = QtWidgets.QDialogButtonBox(
-                                                        QtWidgets.QDialogButtonBox.Ok | QtWidgets.QDialogButtonBox.Cancel
-                                                    )
-                                                    button_box.accepted.connect(dialog.accept)
-                                                    button_box.rejected.connect(dialog.reject)
-                                                    layout.addWidget(button_box)
-                                                    
-                                                    # Show dialog
-                                                    if dialog.exec_() == QtWidgets.QDialog.Accepted:
-                                                        # Get selected value
-                                                        selected_items = table.selectedItems()
-                                                        if selected_items:
-                                                            selected_value = selected_items[0].text()
-                                                            # Update widget and design dictionary
-                                                            if hasattr(w, 'setCurrentText'):
-                                                                w.setCurrentText(selected_value)
-                                                            elif hasattr(w, 'setText'):
-                                                                w.setText(selected_value)
-                                                            # Update design dictionary
-                                                            self.popup(new_list[idx][0], [selected_value], data, main)
-                                                    
-                                                except Exception as e:
-                                                    print(f"Error in popup handler: {str(e)}")
-                                                    # Fallback to simple popup if dialog fails
-                                                    self.popup(new_list[idx][0], new_list, data, main)
-                                            
-                                            return handler
-                                        
-                                        # Connect the signal with the handler
-                                        widget.activated.connect(create_popup_handler(widget, i))
-                                        print(f"Successfully connected signal for widget: {new_list[i][0]}")
-                                    except Exception as e:
-                                        print(f"Error connecting signal for widget {new_list[i][0]}: {str(e)}")
-                                else:
-                                    print(f"[ERROR] Widget not found for key: {new_list[i][0]}")
-                        except (IndexError, AttributeError) as e:
-                            print(f"Error in widget connection loop: {str(e)}")
-                            pass
-
-                    # Change in Ui based on Connectivity selection
-                    ##############################################
-                    """ This routine is for "on change" feature. When ever base key is changed all their corresponding
-                    on_change keys should change. input_value_changed written for each module gives this information in form of list
-                     of tuples [ref input_value_Changed in any module for detailed description]"""
-                    if updated_list is None:
-                        pass
+                            if isinstance(arg_list, list):
+                                result_iter = t[1](*arg_list)
+                            else:
+                                result_iter = t[1](arg_list)
+                        except TypeError:
+                            result_iter = t[1](arg_list)
+                        # Ensure result_iter is always a list for the comprehension
+                        if result_iter is None or isinstance(result_iter, str) or not hasattr(result_iter, '__iter__'):
+                            result_iter = []
+                        data[t[0] + "_customized"] = [all_values_available for all_values_available in result_iter if all_values_available not in disabled_values]
                     else:
-                        for t in updated_list:
-                            for key_name in t[0]:
-                                try:
-                                    key_changed = self.dockWidgetContents.findChild(QtWidgets.QWidget, key_name)
-                                    if key_changed is not None:
-                                        self.on_change_connect(key_changed, updated_list, data, main)
-                                        print(f"Connected signal for key_name: {key_name}")
-                                    else:
-                                        print(f"Warning: Widget not found for key_name: {key_name}")
-                                except Exception as e:
-                                    print(f"Error connecting signal for key_name {key_name}: {str(e)}")
-                                    continue
+                        data[t[0] + "_customized"] = [all_values_available for all_values_available in t[1]()
+                                                      if all_values_available not in disabled_values]
+                else:
+                    data[t[0] + "_customized"] = [all_values_available for all_values_available in t[1]()
+                                                  if all_values_available not in disabled_values]
+            try:
+                print(f"<class 'AttributeError'>: {d} \n {new_list}")
+                d.get(new_list[0][0]).activated.connect(lambda: self.popup(d.get(new_list[0][0]), new_list,updated_list,data))
+                d.get(new_list[1][0]).activated.connect(lambda: self.popup(d.get(new_list[1][0]), new_list,updated_list,data))
+                d.get(new_list[2][0]).activated.connect(lambda: self.popup(d.get(new_list[2][0]), new_list,updated_list,data))
+                d.get(new_list[3][0]).activated.connect(lambda: self.popup(d.get(new_list[3][0]), new_list,updated_list,data))
+                d.get(new_list[4][0]).activated.connect(lambda: self.popup(d.get(new_list[4][0]), new_list,updated_list,data))
+                d.get(new_list[5][0]).activated.connect(lambda: self.popup(d.get(new_list[5][0]), new_list,updated_list,data))
+                d.get(new_list[6][0]).activated.connect(lambda: self.popup(d.get(new_list[6][0]), new_list,updated_list,data))
+                d.get(new_list[7][0]).activated.connect(lambda: self.popup(d.get(new_list[7][0]), new_list,updated_list,data))
+                d.get(new_list[8][0]).activated.connect(lambda: self.popup(d.get(new_list[8][0]), new_list,updated_list,data))
+                d.get(new_list[9][0]).activated.connect(lambda: self.popup(d.get(new_list[9][0]), new_list,updated_list,data))
+                d.get(new_list[10][0]).activated.connect(lambda: self.popup(d.get(new_list[10][0]), new_list,updated_list,data))
+            except IndexError:
+                pass
+
+        # Change in Ui based on Connectivity selection
+        ##############################################
+        """ This routine is for "on change" feature. When ever base key is changed all their corresponding
+        on_change keys should change. input_value_changed written for each module gives this information in form of list
+         of tuples [ref input_value_Changed in any module for detailed description]"""
+        if updated_list is None:
+            pass
+        else:
+            for t in updated_list:
+                for key_name in t[0]:
+                    
+                    key_changed = self.dockWidgetContents.findChild(QtWidgets.QWidget, key_name)
+                    self.on_change_connect(key_changed, updated_list, data, main)
+                    print(f"key_name{key_name} \n key_changed{key_changed}  \n self.on_change_connect ")
 
         self.btn_Reset = QtWidgets.QPushButton(self.dockWidgetContents)
         self.btn_Reset.setGeometry(QtCore.QRect((maxi_width//2)-110, 650, 100, 35))
@@ -1023,7 +906,11 @@ class Window(QMainWindow):
         @author: Umair
 
         """
-        out_list = main.output_values(False)
+        # Robust: try with main, else fallback to single argument
+        try:
+            out_list = main.output_values(main, False)
+        except TypeError:
+            out_list = main.output_values(False)
         self.outputDock = QtWidgets.QDockWidget(MainWindow)
         sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Preferred, QtWidgets.QSizePolicy.Preferred)
         sizePolicy.setHorizontalStretch(1)
@@ -1319,7 +1206,7 @@ class Window(QMainWindow):
         This routine take the list of separate 3D components checkboxes to be displayed in the ribbon from
         the corresponding module file
         """
-        for component in main.get_3d_components():
+        for component in main.get_3d_components(main):
             actionShow_component = QtWidgets.QAction(MainWindow)
 
             actionShow_component.setObjectName(component[0])
@@ -1359,7 +1246,7 @@ class Window(QMainWindow):
         print(f"outside common_function_for_save_and_design ")
         self.actionDesign_Preferences.triggered.connect(lambda: self.combined_design_prefer(data,main))
         self.actionDesign_Preferences.triggered.connect(self.design_preferences)
-        self.designPrefDialog = DesignPreferences(main, self, self.input_dock_inputs)
+        self.designPrefDialog = DesignPreferences(main, self, input_dictionary=self.input_dock_inputs)
         self.actionOsdagSectionModeller=QtWidgets.QAction(MainWindow)
         self.actionOsdagSectionModeller.setObjectName("actionDesign_Preferences")
         self.actionOsdagSectionModeller.triggered.connect(self.osdag_section_modeller)
@@ -1484,7 +1371,11 @@ class Window(QMainWindow):
 
 
         last_design_folder = os.path.join('ResourceFiles', 'last_designs')
-        last_design_file = str(main.module_name()).replace(' ', '') + ".osi"
+        # Robust: try with main, else fallback to no argument
+        try:
+            last_design_file = str(main.module_name(main)).replace(' ', '') + ".osi"
+        except TypeError:
+            last_design_file = str(main.module_name()).replace(' ', '') + ".osi"
         last_design_file = os.path.join(last_design_folder, last_design_file)
         last_design_dictionary = {}
         if not os.path.isdir(last_design_folder):
@@ -1519,12 +1410,6 @@ class Window(QMainWindow):
         self.fuse_model = None
         # print(f'setupUi done 10')
 
-        # After creating the material combo box:
-        # Find the material combo box and connect the event
-        material_combo = self.dockWidgetContents.findChild(QtWidgets.QComboBox, KEY_MATERIAL)
-        if material_combo:
-            material_combo.currentIndexChanged.connect(lambda: self.on_material_grade_changed(material_combo))
-
     def notification(self):
         update_class = Update()
         msg = update_class.notifi()
@@ -1533,7 +1418,10 @@ class Window(QMainWindow):
     def save_output_to_csv(self, main):
         def save_fun():
             status = main.design_status
-            out_list = main.output_values(main, status)
+            try:
+                out_list = main.output_values(main, status)
+            except TypeError:
+                out_list = main.output_values(status)
             in_list = main.input_values(main)
             to_Save = {}
             flag = 0
@@ -1574,173 +1462,172 @@ class Window(QMainWindow):
                                             "Saved successfully.")
         return save_fun
 
-    def popup(self, change_key, change_value, design_dictionary, main):
-        """
-        Handles retaining values in popup once it is closed.
-        """
-        try:
-            # Get the current widget
-            widget = self.dockWidgetContents.findChild(QtWidgets.QWidget, change_key)
-            if not widget:
-                return
+    def popup(self,key, for_custom_list,updated_list,data):
 
-            # Special handling for custom section size
-            if change_key == KEY_LACEDCOL_SEC_SIZE:
-                # Find or create the custom input field
-                custom_input = self.dockWidgetContents.findChild(QtWidgets.QLineEdit, "custom_sec_size_input")
-                
-                if change_value == "Custom":
-                    if not custom_input:
-                        # Create new text field
-                        custom_input = QLineEdit(self.dockWidgetContents)
-                        custom_input.setObjectName("custom_sec_size_input")
-                        custom_input.setPlaceholderText("Enter custom section size (e.g., ISMB 100)")
-                        
-                        # Find the parent layout of the section size widget
-                        parent_layout = None
-                        for i in range(self.dockWidgetContents.layout().count()):
-                            item = self.dockWidgetContents.layout().itemAt(i)
-                            if isinstance(item, QtWidgets.QVBoxLayout):
-                                for j in range(item.count()):
-                                    if item.itemAt(j).widget() == widget:
-                                        parent_layout = item
-                                        break
-                            if parent_layout:
-                                break
-                        
-                        if parent_layout:
-                            # Add the text field to the same layout as the dropdown
-                            parent_layout.addWidget(custom_input)
-                        else:
-                            # If no specific layout found, create a new vertical layout
-                            vbox = QtWidgets.QVBoxLayout()
-                            vbox.addWidget(widget)
-                            vbox.addWidget(custom_input)
-                            # Replace the widget in the main layout with the new layout
-                            for i in range(self.dockWidgetContents.layout().count()):
-                                if self.dockWidgetContents.layout().itemAt(i).widget() == widget:
-                                    self.dockWidgetContents.layout().removeWidget(widget)
-                                    self.dockWidgetContents.layout().insertLayout(i, vbox)
-                                    break
-                    
-                    # Show the custom input field
-                    custom_input.setVisible(True)
-                    custom_input.setFocus()
+        """
+        Function for retaining the values in the popup once it is closed.
+        """
+
+        # @author: Amir
+
+        for c_tup in for_custom_list:
+            a= key.objectName()
+            if c_tup[0] != key.objectName():
+                continue
+            selected = key.currentText()
+            f = c_tup[1]
+            disabled_values = []
+            note = ""
+            if updated_list != None:
+                onchange_key_popup = [item for item in updated_list if item[1] == c_tup[0] and item[2] == TYPE_COMBOBOX_CUSTOMIZED]
+            else:
+                onchange_key_popup = []
+            if onchange_key_popup != []:
+                arg_list = []
+                for change_key in onchange_key_popup[0][0]:
+                    arg_list.append(
+                        self.dockWidgetContents.findChild(QtWidgets.QWidget, change_key).currentText())
+                options = f(arg_list)
+                existing_options = data[c_tup[0] + "_customized"]
+                if selected == "Customized":
+                    if len(c_tup) == 4:
+                        disabled_values = c_tup[2]
+                        note = c_tup[3]
+                    data[c_tup[0] + "_customized"] = self.open_customized_popup(options, existing_options,
+                                                                                disabled_values, note)
+                    if data[c_tup[0] + "_customized"] == []:
+                        # data[c_tup[0] + "_customized"] = [all_values_available for all_values_available in f(arg_list)
+                        #                                   if all_values_available not in disabled_values]
+                        data[c_tup[0] + "_customized"] = options
+                        key.setCurrentIndex(0)
                 else:
-                    # Hide the custom input field if it exists
-                    if custom_input:
-                        custom_input.setVisible(False)
-                        # Clear the custom input value
-                        design_dictionary.pop("custom_sec_size_input", None)
+                    # data[c_tup[0] + "_customized"] = [all_values_available for all_values_available in f(arg_list)
+                    #                                   if all_values_available not in disabled_values]
+                    data[c_tup[0] + "_customized"] = options
 
-            # For other cases, proceed with normal handling
-            if hasattr(widget, 'currentText'):
-                current_text = widget.currentText()
-                if current_text:
-                    design_dictionary[change_key] = current_text
-            elif hasattr(widget, 'text'):
-                current_text = widget.text()
-                if current_text:
-                    design_dictionary[change_key] = current_text
-
-        except Exception as e:
-            # Use print for logging if logger is not available
-            print(f"Error in popup function: {str(e)}")
-            # Try to use logger if available
-            try:
-                if hasattr(main, 'set_osdaglogger'):
-                    logger = main.set_osdaglogger(None)
-                    if logger:
-                        logger.error(f"Error in popup function: {str(e)}")
-            except:
-                pass  # Silently continue if logger setup fails
+                    # input = f(arg_list)
+                    # data[c_tup[0] + "_customized"] = input
+            else:
+                options = f()
+                existing_options = data[c_tup[0] + "_customized"]
+                if selected == "Customized":
+                    if len(c_tup) == 4:
+                        disabled_values = c_tup[2]
+                        note = c_tup[3]
+                    data[c_tup[0] + "_customized"] = self.open_customized_popup(options, existing_options,
+                                                                                disabled_values, note)
+                    if data[c_tup[0] + "_customized"] == []:
+                        # data[c_tup[0] + "_customized"] = [all_values_available for all_values_available in f()
+                        #                               if all_values_available not in disabled_values]
+                        data[c_tup[0] + "_customized"] = options
+                        key.setCurrentIndex(0)
+                else:
+                    # data[c_tup[0] + "_customized"] = [all_values_available for all_values_available in f()
+                    #                                   if all_values_available not in disabled_values]
+                    data[c_tup[0] + "_customized"] = options
 
     def on_change_connect(self, key_changed, updated_list, data, main):
-        """
-        Connect the currentIndexChanged signal to the change handler with proper error handling.
-        """
-        try:
-            if key_changed is not None and hasattr(key_changed, 'currentIndexChanged'):
-                key_changed.currentIndexChanged.connect(
-                    lambda: self.change(key_changed, updated_list, data, main)
-                )
-            else:
-                print(f"Warning: Widget {key_changed} does not support currentIndexChanged signal")
-        except Exception as e:
-            print(f"Error connecting signal: {str(e)}")
-            pass
+        # Only connect if the widget has the currentIndexChanged signal
+        if hasattr(key_changed, 'currentIndexChanged'):
+            key_changed.currentIndexChanged.connect(lambda: self.change(key_changed, updated_list, data, main))
 
     def change(self, k1, new, data, main):
+
         """
         @author: Umair
         """
-        try:
-            for tup in new:
-                (object_name, k2_key, typ, f) = tup
+        for tup in new:
+            (object_name, k2_key, typ, f) = tup
+            
 
-                if k1.objectName() not in object_name:
-                    continue
-                if typ in [TYPE_LABEL, TYPE_OUT_LABEL]:
-                    k2_key = k2_key + "_label"
-                if typ == TYPE_NOTE:
-                    k2_key = k2_key + "_note"
+            if k1.objectName() not in object_name:
+                continue
+            if typ in [TYPE_LABEL, TYPE_OUT_LABEL]:
+                k2_key = k2_key + "_label"
+            if typ == TYPE_NOTE:
+                k2_key = k2_key + "_note"
 
-                if typ in [TYPE_OUT_DOCK, TYPE_OUT_LABEL]:
-                    k2 = self.dockWidgetContents_out.findChild(QtWidgets.QWidget, k2_key)
-                elif typ == TYPE_WARNING:
-                    k2 = str(k2_key)
+            if typ in [TYPE_OUT_DOCK, TYPE_OUT_LABEL]:
+                k2 = self.dockWidgetContents_out.findChild(QtWidgets.QWidget, k2_key)
+            elif typ == TYPE_WARNING:
+                k2 = str(k2_key)
+            else:
+                k2 = self.dockWidgetContents.findChild(QtWidgets.QWidget, k2_key)
+
+
+            arg_list = []
+            for ob_name in object_name:
+                key = self.dockWidgetContents.findChild(QtWidgets.QWidget, ob_name)
+                arg_list.append(key.currentText())
+
+            val = f(arg_list)
+            print(f"\n object_name {object_name}")
+            print(f"\n k2_key {k2_key}")
+            print(f"\n typ {typ}")
+            print(f"\n k2 {k2}")
+            if typ == TYPE_COMBOBOX:
+                k2.clear()
+                for values in val:
+                    k2.addItem(values)
+                    k2.setCurrentIndex(0)
+                if VALUES_WELD_TYPE[1] in val:
+                    k2.setCurrentText(VALUES_WELD_TYPE[1])
+                if k2_key in RED_LIST:
+                    red_list_set = set(red_list_function())
+                    current_list_set = set(val)
+                    current_red_list = list(current_list_set.intersection(red_list_set))
+                    for value in current_red_list:
+                        indx = val.index(str(value))
+                        k2.setItemData(indx, QBrush(QColor("red")), Qt.TextColorRole)
+            elif typ == TYPE_COMBOBOX_CUSTOMIZED:
+                k2.setCurrentIndex(0)
+                data[k2_key + "_customized"] = val
+            elif typ == TYPE_CUSTOM_MATERIAL:
+                if val:
+                    self.new_material_dialog()
+            elif typ == TYPE_CUSTOM_SECTION:
+                if val:
+                    self.import_custom_section()
+
+            elif typ == TYPE_LABEL:
+                k2.setText(val)
+            elif typ == TYPE_NOTE:
+                k2.setText(val)
+            elif typ == TYPE_IMAGE:
+                pixmap1 = QPixmap(val)
+                k2.setPixmap(pixmap1)
+            elif typ == TYPE_TEXTBOX:
+                if val:
+                    k2.setEnabled(True)
                 else:
-                    k2 = self.dockWidgetContents.findChild(QtWidgets.QWidget, k2_key)
-
-                # Build argument list
-                arg_list = []
-                for ob_name in object_name:
-                    widget = self.dockWidgetContents.findChild(QtWidgets.QWidget, ob_name)
-                    if widget:
-                        if hasattr(widget, 'currentText'):
-                            arg_list.append(widget.currentText())
-                        elif hasattr(widget, 'text'):
-                            arg_list.append(widget.text())
-
-                # Call the function with the argument list
-                try:
-                    if f is not None:
-                        val = f(*arg_list) if arg_list else f()
-                        if val is not None:
-                            if typ == TYPE_COMBOBOX:
-                                k2.clear()
-                                k2.addItems(val)
-                            elif typ == TYPE_COMBOBOX_CUSTOMIZED:
-                                if k2_key + "_customized" not in data:
-                                    data[k2_key + "_customized"] = []
-                                data[k2_key + "_customized"] = val
-                                k2.clear()
-                                k2.addItems(val)
-                except Exception as e:
-                    print(f"Error calling function {f.__name__ if hasattr(f, '__name__') else 'unknown'}: {str(e)}")
-                    # Try to use logger if available
-                    try:
-                        if hasattr(main, 'set_osdaglogger'):
-                            logger = main.set_osdaglogger(None)
-                            if logger:
-                                logger.error(f"Error calling function: {str(e)}")
-                    except:
-                        pass
-
-        except Exception as e:
-            print(f"Error in change function: {str(e)}")
-            # Try to use logger if available
-            try:
-                if hasattr(main, 'set_osdaglogger'):
-                    logger = main.set_osdaglogger(None)
-                    if logger:
-                        logger.error(f"Error in change function: {str(e)}")
-            except:
+                    k2.setDisabled(True)
+                    k2.setText("")
+            elif typ == TYPE_COMBOBOX_FREEZE:
+                if val:
+                    k2.setEnabled(False)
+                else:
+                    k2.setEnabled(True)
+            elif typ == TYPE_WARNING:
+                if val:
+                    QMessageBox.warning(self, "Application", k2)
+            elif typ in [TYPE_OUT_DOCK, TYPE_OUT_LABEL]:
+                if val:
+                    k2.setVisible(False)
+                else:
+                    k2.setVisible(True)
+            else:
                 pass
 
+        if self.ui_loaded:
+            self.output_title_change(main)
+
     def output_title_change(self, main):
+
         status = main.design_status
-        out_list = main.output_values(status)  # Remove the extra main parameter
+        try:
+            out_list = main.output_values(main, status)
+        except TypeError:
+            out_list = main.output_values(status)
         key = None
         no_field_titles = []
         titles = []
@@ -1799,9 +1686,9 @@ class Window(QMainWindow):
         return title_repeat
 
     def input_dp_connection(self, widget):
-        if isinstance(widget, QtWidgets.QComboBox):
+        if isinstance(widget, QComboBox):
             widget.currentIndexChanged.connect(self.clear_design_pref_dictionary)
-        elif isinstance(widget, QtWidgets.QLineEdit):
+        elif isinstance(widget, QLineEdit):
             widget.textChanged.connect(self.clear_design_pref_dictionary)
 
     def clear_design_pref_dictionary(self):
@@ -1929,13 +1816,9 @@ class Window(QMainWindow):
                     elif input_type == TYPE_COMBOBOX:
                         val = key.currentText()
                         design_dictionary.update({key_name: val})
-                    else:
-                        val = main.get_values_for_design_pref(key_name, design_dictionary)  # Remove the extra main parameter
-                        if val is not None:
-                            design_dictionary.update({key_name: val})
         else:
             print('flag false')
-            for without_des_pref in main.input_dictionary_without_design_pref():
+            for without_des_pref in main.input_dictionary_without_design_pref(main):
                 input_dock_key = without_des_pref[0]
                 input_list = without_des_pref[1]
                 input_source = without_des_pref[2]
@@ -1943,24 +1826,17 @@ class Window(QMainWindow):
                 print(f"\n self.design_pref_inputs.keys() {self.design_pref_inputs.keys()}")
                 for key_name in input_list:
                     if input_source == 'Input Dock':
-                        try:
-                            if input_dock_key in design_dictionary:
-                                design_dictionary.update({key_name: design_dictionary[input_dock_key]})
-                            else:
-                                print(f"Warning: Key '{input_dock_key}' not found in design dictionary")
-                                # Set a default value or skip this update
-                                continue
-                        except Exception as e:
-                            print(f"Error updating design dictionary for key '{key_name}': {str(e)}")
-                            continue
+                        if input_dock_key in design_dictionary:
+                            design_dictionary.update({key_name: design_dictionary[input_dock_key]})
+                        else:
+                            design_dictionary.update({key_name: ""})  # or a sensible default
                     else:
+                        # Robust: try with main, else fallback to standard signature
                         try:
+                            val = main.get_values_for_design_pref(main, key_name, design_dictionary)
+                        except TypeError:
                             val = main.get_values_for_design_pref(key_name, design_dictionary)
-                            if val is not None:
-                                design_dictionary.update({key_name: val})
-                        except Exception as e:
-                            print(f"Error getting design preference value for key '{key_name}': {str(e)}")
-                            continue
+                        design_dictionary.update({key_name: val})
 
             for dp_key in self.design_pref_inputs.keys():
                 design_dictionary[dp_key] = self.design_pref_inputs[dp_key]
@@ -1970,7 +1846,7 @@ class Window(QMainWindow):
         self.design_inputs = design_dictionary
         print(f"\n self.input_dock_inputs {self.input_dock_inputs}")
         print(f"\n design_fn design_dictionary{self.design_inputs}")
-        print(f"\n main.input_dictionary_without_design_pref(){main.input_dictionary_without_design_pref()}")
+        print(f"\n main.input_dictionary_without_design_pref(main){main.input_dictionary_without_design_pref(main)}")
 
     '''
     @author: Umair
@@ -2029,8 +1905,6 @@ class Window(QMainWindow):
             return Flexure_Cantilever
         elif name == KEY_DISP_FLEXURE3:
             return Flexure_Misc
-        elif name == KEY_DISP_LAPJOINTBOLTED:
-            return LapJointBolted
         else:
             return GussetConnection
 # Function for getting inputs from a file
@@ -2157,10 +2031,11 @@ class Window(QMainWindow):
             QMessageBox.about(QMessageBox(), "Information", self.load_input_error_message)
 
     def common_function_for_save_and_design(self, main, data, trigger_type):
+
         # @author: Amir
 
         option_list = main.input_values(self)
-        for data_key_tuple in main.customized_input():
+        for data_key_tuple in main.customized_input(main):
             data_key = data_key_tuple[0] + "_customized"
             if data_key in data.keys() and len(data_key_tuple) == 4:
                 data[data_key] = [data_values for data_values in data[data_key]
@@ -2181,10 +2056,14 @@ class Window(QMainWindow):
                 self.designPrefDialog = DesignPreferences(main, self, input_dictionary=self.input_dock_inputs)
 
                 if 'Select Section' in self.input_dock_inputs.values():
+                    # print(f"self.designPrefDialog.flag = False")
                     self.designPrefDialog.flag = False
                 else:
                     self.designPrefDialog.flag = True
                 print(f"QDialog done")
+
+                # if self.prev_inputs != {}:
+                #     self.design_pref_inputs = {}
 
         else:
             main.design_button_status = True
@@ -2197,34 +2076,27 @@ class Window(QMainWindow):
             with open("logging_text.log", 'w') as log_file:
                 pass
 
-            error = main.func_for_validation(self.design_inputs)
+            # print(f"\n design_dictionary {self.design_inputs}")
+            # Robust: try with main, else fallback to single argument
+            try:
+                error = main.func_for_validation(main, self.design_inputs)
+            except TypeError:
+                error = main.func_for_validation(self.design_inputs)
             status = main.design_status
             print(f"status{status}")
             print(f"trigger_type{trigger_type}")
 
             if error is not None:
                 self.show_error_msg(error)
-                # Don't return here, continue to show results even if there are errors
-                # self.textEdit.append("\nCalculation Results:")
-                # self.textEdit.append("-------------------")
+                return
 
-            out_list = main.output_values(status)
+            try:
+                out_list = main.output_values(main, status)
+            except TypeError:
+                out_list = main.output_values(status)
             print('out_list changed',out_list)
 
-            # Show calculation results in textEdit
-            # self.textEdit.append("\nDetailed Results:")
-            # self.textEdit.append("----------------")
-            
             for option in out_list:
-                if option[2] == TYPE_TITLE:
-                    # Skip printing section headers to log window
-                    pass
-                elif option[2] == TYPE_TEXTBOX and option[3]:
-                    # Only print actual values, not headers or specific messages
-                    if not any(header in option[1] for header in ["Section and Material:", "Design Parameters:", "Welding Details:", "Lacing Details:", "Tie Plate Details:", "Design Summary:", "Allowed Utilization Ratio:", "Error: An error occurred"]):
-                        self.textEdit.append(f"{option[1]}: {option[3]}")
-                
-                # Update the output dock fields
                 if option[2] == TYPE_TEXTBOX:
                     txt = self.dockWidgetContents_out.findChild(QtWidgets.QWidget, option[0])
                     txt.setText(str(option[3]))
@@ -2236,6 +2108,7 @@ class Window(QMainWindow):
                 elif option[2] == TYPE_OUT_BUTTON:
                     self.dockWidgetContents_out.findChild(QtWidgets.QWidget, option[0]).setEnabled(True)
 
+            # self.progress_bar.setValue(50)
             self.output_title_change(main)
             print('Output title changed',self.output_title_change(main))
             last_design_folder = os.path.join('ResourceFiles', 'last_designs')
@@ -2243,7 +2116,7 @@ class Window(QMainWindow):
             if not os.path.isdir(last_design_folder):
                 print(' not os.path.isdir')
                 os.makedirs(last_design_folder)
-            last_design_file = str(main.module_name()).replace(' ', '') + ".osi"
+            last_design_file = str(main.module_name(main)).replace(' ', '') + ".osi"
             last_design_file = os.path.join(last_design_folder, last_design_file)
             out_titles_status = []
             out_titles = []
@@ -2263,14 +2136,23 @@ class Window(QMainWindow):
             with open(str(last_design_file), 'w') as last_design:
                 yaml.dump(self.design_inputs, last_design)
             self.design_inputs.pop("out_titles_status")
+            # self.progress_bar.setValue(60)
 
-            # Temporarily comment out 3D components section
-            """
+            # if status is True and main.module in [KEY_DISP_FINPLATE, KEY_DISP_BEAMCOVERPLATE,
+            #                                       KEY_DISP_BEAMCOVERPLATEWELD, KEY_DISP_CLEATANGLE,
+            #                                       KEY_DISP_ENDPLATE, KEY_DISP_BASE_PLATE, KEY_DISP_SEATED_ANGLE,
+            #                                       KEY_DISP_TENSION_BOLTED, KEY_DISP_TENSION_WELDED,KEY_DISP_COLUMNCOVERPLATE,
+            #                                       KEY_DISP_COLUMNCOVERPLATEWELD, KEY_DISP_COLUMNENDPLATE]:
+
+            # ##############trial##############
+            # status = True
+            # ##############trial##############
             if status is True and main.module in [KEY_DISP_FINPLATE, KEY_DISP_BEAMCOVERPLATE, KEY_DISP_BEAMCOVERPLATEWELD, KEY_DISP_CLEATANGLE,
                                                   KEY_DISP_ENDPLATE, KEY_DISP_BASE_PLATE, KEY_DISP_SEATED_ANGLE, KEY_DISP_TENSION_BOLTED,
                                                   KEY_DISP_TENSION_WELDED, KEY_DISP_COLUMNCOVERPLATE, KEY_DISP_COLUMNCOVERPLATEWELD,
                                                   KEY_DISP_COLUMNENDPLATE, KEY_DISP_BCENDPLATE, KEY_DISP_BB_EP_SPLICE,
-                                                  KEY_DISP_COMPRESSION_COLUMN,KEY_DISP_FLEXURE,KEY_DISP_FLEXURE2,KEY_DISP_COMPRESSION_Strut,KEY_DISP_LAPJOINTBOLTED]:
+                                                  KEY_DISP_COMPRESSION_COLUMN,KEY_DISP_FLEXURE,KEY_DISP_FLEXURE2,KEY_DISP_COMPRESSION_Strut]: # , KEY_DISP_FLEXURE
+                # print(self.display, self.folder, main.module, main.mainmodule)
                 print("common start")
                 print(f"main object type: {type(main)}")
                 print(f"main attributes: {dir(main)}")
@@ -2279,9 +2161,14 @@ class Window(QMainWindow):
                 self.commLogicObj = CommonDesignLogic(self.display, self.folder, main.module, main.mainmodule)
                 print(main.module)
                 print(main.mainmodule)
+                # print("common start")
                 status = main.design_status
+                ##############trial##############
+                # status = True
+                ##############trial##############
 
                 module_class = self.return_class(main.module)
+                # self.progress_bar.setValue(80)
                 print("3D start")
                 self.commLogicObj.call_3DModel(status, module_class)
                 print("3D end")
@@ -2293,13 +2180,32 @@ class Window(QMainWindow):
                     action.setEnabled(True)
                 fName = str('./ResourceFiles/images/3d.png')
                 file_extension = fName.split(".")[-1]
+
+                # if file_extension == 'png':
+                #     self.display.ExportToImage(fName)
+                #     im = Image.open('./ResourceFiles/images/3d.png')
+                #     w,h=im.size
+                #     if(w< 640 or h < 360):
+                #         print('Re-taking Screenshot')
+                #         self.resize(700,500)
+                #         self.outputDock.hide()
+                #         self.inputDock.hide()
+                #         self.textEdit.hide()
+                #         QTimer.singleShot(0, lambda:self.retakeScreenshot(fName))
+
             else:
+                for fName in ['3d.png', 'top.png',
+                              'front.png', 'side.png']:
+                    with open("./ResourceFiles/images/"+fName, 'w'):
+                        pass
                 self.display.EraseAll()
                 for chkbox in main.get_3d_components(main):
                     self.frame.findChild(QtWidgets.QCheckBox, chkbox[0]).setEnabled(False)
                 for action in self.menugraphics_component_list:
                     action.setEnabled(False)
-            """
+
+            # self.progress_bar.setValue(100)
+
 
     def retakeScreenshot(self,fName):
         Ww=self.frameGeometry().width()
@@ -2312,29 +2218,7 @@ class Window(QMainWindow):
         self.textEdit.show()
 
     def show_error_msg(self, error):
-        try:
-            # Handle different types of error inputs
-            if isinstance(error, (list, tuple)):
-                if len(error) > 0:
-                    error_msg = str(error[0])
-                else:
-                    error_msg = "An error occurred"
-            elif isinstance(error, str):
-                error_msg = error
-            else:
-                error_msg = str(error)
-
-            # Display the error message
-            QMessageBox.information(self, 'Information', error_msg)
-            
-            # Also show the error in the output dock
-            self.textEdit.append(f"Error: {error_msg}")
-            
-        except Exception as e:
-            print(f"Error displaying message: {str(e)}")
-            # Fallback to basic message box if there's an error
-            QMessageBox.warning(self, 'Error', 'An error occurred while displaying the message')
-            self.textEdit.append("Error: An error occurred while displaying the message")
+        QMessageBox.about(self,'information',error[0])  # show only first error message.
 
     def clear_output_fields(self):
         for output_field in self.dockWidgetContents_out.findChildren(QtWidgets.QLineEdit):
@@ -2533,7 +2417,6 @@ class Window(QMainWindow):
         self.material_popup_message = ''
         self.invalid_field = ''
         dialog.setWindowTitle('Custom Material')
-        dialog.setModal(True)  # Make dialog modal
         layout = QtWidgets.QGridLayout(dialog)
         widget = QtWidgets.QWidget(dialog)
         widget.setLayout(layout)
@@ -2548,17 +2431,20 @@ class Window(QMainWindow):
             label = QtWidgets.QLabel(widget)
             label.setObjectName(textbox_name+"_label")
             label.setText(_translate("MainWindow", "<html><body><p>" + textbox_name + "</p></body></html>"))
+            # label.resize(120, 30)
             label.setFixedSize(100, 30)
             layout.addWidget(label, i, 1, 1, 1)
 
             textbox = QtWidgets.QLineEdit(widget)
             textbox.setObjectName(textbox_name)
+            # textbox.resize(120, 30)
             textbox.setFixedSize(200, 24)
             if textbox_name == 'Grade':
                 textbox.setReadOnly(True)
                 textbox.setText("Cus____")
             else:
                 textbox.setValidator(QtGui.QIntValidator())
+                # textbox.mousePressEvent = event_function[textbox_list.index(textbox_name)]
                 self.original_focus_event_functions.update({textbox_name: textbox.focusOutEvent})
                 textbox.focusOutEvent = event_function[textbox_list.index(textbox_name)]
 
@@ -2574,9 +2460,8 @@ class Window(QMainWindow):
         layout.addWidget(add_button, i, 1, 1, 2)
 
         dialog.setFixedSize(350, 250)
-        result = dialog.exec_()  # Wait for dialog to close
-        
-        if result == QtWidgets.QDialog.Accepted:
+        closed = dialog.exec()
+        if closed is not None:
             input_dock_material = self.dockWidgetContents.findChild(QtWidgets.QWidget, KEY_MATERIAL)
             input_dock_material.clear()
             for item in connectdb("Material"):
@@ -2692,7 +2577,7 @@ class Window(QMainWindow):
     '''
     def combined_design_prefer(self, data, main):
 
-        on_change_tab_list = main.tab_value_changed()
+        on_change_tab_list = main.tab_value_changed(main)
         print(f"ui_template combined_design_prefer on_change_tab_list= {on_change_tab_list} \n")
         for new_values in on_change_tab_list:
             (tab_name, key_list, key_to_change, key_type, f) = new_values
@@ -2722,7 +2607,7 @@ class Window(QMainWindow):
         #         if validation_key.text() != "":
         #             self.designPrefDialog.fu_fy_validation_connect([fu_key, fy_key], validation_key, material_key)
 
-        for edit in main.edit_tabs():
+        for edit in main.edit_tabs(main):
             (tab_name, input_dock_key_name, change_typ, f) = edit
             tab = self.designPrefDialog.ui.tabWidget.tabs.findChild(QtWidgets.QWidget, tab_name)
             input_dock_key = self.dockWidgetContents.findChild(QtWidgets.QWidget, input_dock_key_name)
@@ -2731,17 +2616,13 @@ class Window(QMainWindow):
                     self.designPrefDialog.ui.tabWidget.tabs.indexOf(tab), f(input_dock_key.currentText()))
             elif change_typ == TYPE_REMOVE_TAB:
 
-                if tab is None:
-                    print("WARNING: Tab not yet created — skipping preference sync.")
-                    return  # or skip logic safely
-                
                 if tab.objectName() != f(input_dock_key.currentText()):
                     self.designPrefDialog.ui.tabWidget.tabs.removeTab(
                         self.designPrefDialog.ui.tabWidget.tabs.indexOf(tab))
                 # if tab:
                 #     self.designPrefDialog.ui.tabWidget.insertTab(0, tab, tab_name)
 
-        for refresh in main.refresh_input_dock():
+        for refresh in main.refresh_input_dock(main):
             (tab_name, key_name, key_type, tab_key, master_key, value, database_arg) = refresh
             tab = self.designPrefDialog.ui.tabWidget.tabs.findChild(QtWidgets.QWidget, tab_name)
             if tab:
@@ -2771,45 +2652,40 @@ class Window(QMainWindow):
                 continue
             arg_list = []
             for key_name in key_list:
-                widget = tab.findChild(QtWidgets.QWidget, key_name)
-                if widget is None:
-                    continue
-                if isinstance(widget, QtWidgets.QComboBox):
-                    arg_list.append(widget.currentText())
-                elif isinstance(widget, QtWidgets.QLineEdit):
-                    arg_list.append(widget.text())
-
-            if not arg_list:
-                continue
+                # if object_name != key.objectName():
+                #     continue
+                key = tab.findChild(QtWidgets.QWidget, key_name)
+                if isinstance(key, QtWidgets.QComboBox):
+                    arg_list.append(key.currentText())
+                elif isinstance(key, QtWidgets.QLineEdit):
+                    arg_list.append(key.text())
 
             arg_list.append(self.input_dock_inputs)
             arg_list.append(main.design_button_status)
-            
-            try:
-                val = f(*arg_list)  # Unpack arguments when calling the function
-            except Exception as e:
-                print(f"Error calling function: {e}")
-                continue
+            # try:
+            #     tab1 = self.designPrefDialog.ui.tabWidget.findChild(QtWidgets.QWidget, tab_name)
+            #     key1 = tab.findChild(QtWidgets.QWidget, KEY_SECSIZE_SELECTED)
+            #     value1 = key1.text()
+            #     arg_list.append({KEY_SECSIZE_SELECTED: value1})
+            # except:
+            #     pass
+            val = f(arg_list)
 
             for k2_key_name in k2_key_list:
+                # print(k2_key_name)
                 k2 = tab.findChild(QtWidgets.QWidget, k2_key_name)
-                if k2 is None:
-                    continue
-                    
                 if isinstance(k2, QtWidgets.QComboBox):
-                    if k2_key_name in val:
+                    if k2_key_name in val.keys():
                         k2.clear()
                         for values in val[k2_key_name]:
                             k2.addItem(str(values))
-                elif isinstance(k2, QtWidgets.QLineEdit):
-                    if k2_key_name in val:
-                        k2.setText(str(val[k2_key_name]))
-                elif isinstance(k2, QtWidgets.QLabel):
-                    if k2_key_name in val:
-                        pixmap1 = QPixmap(val[k2_key_name])
-                        k2.setPixmap(pixmap1)
+                if isinstance(k2, QtWidgets.QLineEdit):
+                    k2.setText(str(val[k2_key_name]))
+                if isinstance(k2, QtWidgets.QLabel):
+                    pixmap1 = QPixmap(val[k2_key_name])
+                    k2.setPixmap(pixmap1)
 
-            if typ == TYPE_OVERWRITE_VALIDATION and not val.get("Validation", [True, ""])[0]:
+            if typ == TYPE_OVERWRITE_VALIDATION and not val["Validation"][0]:
                 QMessageBox.warning(tab, "Warning", val["Validation"][1])
 
     def refresh_section_connect(self, add_button, prev, key_name, key_type, tab_key, arg,data):
@@ -3193,28 +3069,6 @@ class Window(QMainWindow):
             # self.OsdagSectionModeller.OCCFrame.setMinimumSize(490,350)
             self.OsdagSectionModeller.OCCWindow.setFocus()
         return set_size
-
-    def on_material_grade_changed(self, combo):
-        selected_grade = combo.currentText()
-        conn = sqlite3.connect(PATH_TO_DATABASE)
-        cur = conn.cursor()
-        cur.execute("SELECT fy, fu FROM Material WHERE grade = ?", (selected_grade,))
-        row = cur.fetchone()
-        conn.close()
-        fy_field = self.dockWidgetContents.findChild(QtWidgets.QLineEdit, 'fy_field')
-        fu_field = self.dockWidgetContents.findChild(QtWidgets.QLineEdit, 'fu_field')
-        if row:
-            fy, fu = row
-            if fy_field:
-                fy_field.setText(str(fy))
-            if fu_field:
-                fu_field.setText(str(fu))
-        else:
-            if fy_field:
-                fy_field.setText("")
-            if fu_field:
-                fu_field.setText("")
-            QMessageBox.warning(self, "Material Not Found", "Selected material not found in database.")
 
 class Dialog1(QtWidgets.QDialog):
     dialogShown = QtCore.pyqtSignal()

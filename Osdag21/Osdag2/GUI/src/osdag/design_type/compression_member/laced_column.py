@@ -428,7 +428,7 @@ class LacedColumn(Member):
         # Section
         options_list.append(("title_Section ", "Section Details", TYPE_TITLE, None, True, 'No Validator'))
         options_list.append((KEY_SEC_PROFILE, KEY_DISP_LACEDCOL_SEC_PROFILE, TYPE_COMBOBOX, KEY_LACEDCOL_SEC_PROFILE_OPTIONS, True, 'No Validator'))
-        options_list.append((KEY_SECSIZE, KEY_DISP_SECSIZE, TYPE_COMBOBOX_CUSTOMIZED, KEY_LACEDCOL_SEC_SIZE_OPTIONS, True, 'No Validator'))
+        options_list.append((KEY_SECSIZE, KEY_DISP_SECSIZE, TYPE_COMBOBOX_CUSTOMIZED, ['All', 'Customized'], True, 'No Validator'))
 
         # Material
         options_list.append(("title_Material", "Material Properties", TYPE_TITLE, None, True, 'No Validator'))
@@ -551,7 +551,7 @@ class LacedColumn(Member):
         # Section and Material Details
         out_list.append((None, "Section and Material Details", TYPE_TITLE, None, True))
         out_list.append((KEY_SECSIZE, "Section Size", TYPE_TEXTBOX, getattr(self, 'section_designation', '') if flag else '', True))
-        out_list.append((KEY_MATERIAL, "Material Grade", TYPE_TEXTBOX, self.material.get('grade', '') if getattr(self, 'material', None) else '', True))
+        out_list.append((KEY_MATERIAL, "Material Grade", TYPE_TEXTBOX, self.material.get('grade', '') if isinstance(self.material, dict) else (self.material if self.material else ''), True))
         # Effective Lengths
         out_list.append((None, "Effective Lengths", TYPE_TITLE, None, True))
         out_list.append((KEY_EFF_LEN_YY, "Effective Length (YY)", TYPE_TEXTBOX, safe_display(self.result.get('effective_length_yy')) if flag else '', True))
@@ -623,14 +623,14 @@ class LacedColumn(Member):
             print(f"\n design_dictionary{design_dictionary}")
             self.set_input_values(design_dictionary)
             if self.design_status ==False and self.failed_design_dict is not None and len(self.failed_design_dict)>0:
-                logger.error(
+                self.logger.error(
                     "Design Failed, Check Design Report"
                 )
                 return # ['Design Failed, Check Design Report'] @TODO
             elif self.design_status:
                 pass
             else:
-                logger.error(
+                self.logger.error(
                     "Design Failed. Slender Sections Selected"
                 )
                 return # ['Design Failed. Slender Sections Selected']
@@ -1769,3 +1769,40 @@ class LacedColumn(Member):
         """
         return ["Fixed", "Pinned", "Free"]
         
+class SectionDesignationDialog(QDialog):
+    def __init__(self, section_list, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Select Section Designations")
+        self.setModal(True)
+        self.selected_sections = []
+        layout = QVBoxLayout(self)
+        self.list_widget = QListWidget()
+        self.list_widget.addItems(section_list)
+        self.list_widget.setSelectionMode(QListWidget.MultiSelection)
+        layout.addWidget(self.list_widget)
+        button_box = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        button_box.accepted.connect(self.accept)
+        button_box.rejected.connect(self.reject)
+        layout.addWidget(button_box)
+
+    def get_selected(self):
+        return [item.text() for item in self.list_widget.selectedItems()]
+
+    # When opening the SectionDesignationDialog for 'Customized', fetch the section list from the database using the selected profile
+    def open_section_designation_dialog(self, selected_profile, current_selected=None, disabled_values=None):
+        if disabled_values is None:
+            disabled_values = []
+        # Fetch all designations for the selected profile from the database
+        section_list = connectdb(selected_profile, call_type="popup")
+        dialog = SectionDesignationDialog(section_list)
+        if current_selected:
+            dialog.list_widget.clearSelection()
+            for i in range(dialog.list_widget.count()):
+                if dialog.list_widget.item(i).text() in current_selected:
+                    dialog.list_widget.item(i).setSelected(True)
+        if dialog.exec_() == QDialog.Accepted:
+            selected = dialog.get_selected()
+            # Use selected as the customized section designation list
+            self.sec_list = selected
+            return selected
+        return None

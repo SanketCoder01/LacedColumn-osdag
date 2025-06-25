@@ -7,7 +7,7 @@ Started on 01 - Nov - 2018
 import math
 from ...Common import *
 import pandas as pd
-# from ...Common import KEY_DP_FAB_SHOP
+from ...Common import KEY_DP_FAB_SHOP, KEY_DP_FAB_FIELD
 
 
 class IS800_2007(object):
@@ -466,7 +466,7 @@ class IS800_2007(object):
                 possible reversal of stress into
                 compression resulting from the action
                 of wind or earthquake forces]]
-            6)  Members always under tension’) (other
+            6)  Members always under tension') (other
                 than pre-tensioned members)
         """
         if Type == 1:

@@ -715,6 +715,82 @@ KEY_LACING_UTILIZATION = 'LacedColumn.LacingUtilization'
 KEY_DISP_LACING_UTILIZATION = 'Utilization'
 KEY_BOLT_GRADE = 'LacedColumn.BoltGrade'
 KEY_DISP_BOLT_GRADE = 'Bolt Grade'
+# Effective Lengths
+KEY_EFF_LEN_YY = "eff_len_yy"
+KEY_DISP_EFF_LEN_YY = "Effective Length about YY (mm)"
+
+KEY_EFF_LEN_ZZ = "eff_len_zz"
+KEY_DISP_EFF_LEN_ZZ = "Effective Length about ZZ (mm)"
+
+# End Conditions
+KEY_END_COND_YY_1 = "end_condition_yy_1"
+KEY_DISP_END_COND_YY_1 = "End Condition YY - Member 1"
+
+KEY_END_COND_YY_2 = "end_condition_yy_2"
+KEY_DISP_END_COND_YY_2 = "End Condition YY - Member 2"
+
+KEY_END_COND_ZZ_1 = "end_condition_zz_1"
+KEY_DISP_END_COND_ZZ_1 = "End Condition ZZ - Member 1"
+
+KEY_END_COND_ZZ_2 = "end_condition_zz_2"
+KEY_DISP_END_COND_ZZ_2 = "End Condition ZZ - Member 2"
+
+# Slenderness Ratios
+KEY_SLENDER_YY = "slender_yy"
+KEY_DISP_SLENDER_YY = "Effective Slenderness Ratio about YY"
+
+KEY_SLENDER_ZZ = "slender_zz"
+KEY_DISP_SLENDER_ZZ = "Effective Slenderness Ratio about ZZ"
+
+# Compressive Design
+KEY_FCD = "fcd"
+KEY_DISP_FCD = "Design Compressive Stress fcd (MPa)"
+
+KEY_DESIGN_COMPRESSIVE = "design_compressive"
+KEY_DISP_DESIGN_COMPRESSIVE = "Design Compressive Strength (kN)"
+
+# Channel Spacing
+KEY_CHANNEL_SPACING = "spacing_between_channels"
+KEY_DISP_CHANNEL_SPACING = "Spacing Between Channels (mm)"
+
+# Tie Plate Dimensions
+KEY_TIE_PLATE_D = "tie_plate_d"
+KEY_DISP_TIE_PLATE_D = "Tie Plate Depth D (mm)"
+
+KEY_TIE_PLATE_T = "tie_plate_t"
+KEY_DISP_TIE_PLATE_T = "Tie Plate Thickness t (mm)"
+
+KEY_TIE_PLATE_L = "tie_plate_l"
+KEY_DISP_TIE_PLATE_L = "Tie Plate Length L (mm)"
+
+# Lacing Details
+KEY_LACING_SPACING = "lacing_spacing"
+KEY_DISP_LACING_SPACING = "Lacing Spacing (L0) (mm)"
+
+KEY_LACING_ANGLE = "lacing_angle"
+KEY_DISP_LACING_ANGLE = "Lacing Angle (°)"
+
+KEY_LACING_FORCE = "lacing_force"
+KEY_DISP_LACING_FORCE = "Force on Lacing (kN)"
+
+# Lacing Section
+KEY_LACING_SECTION_DIM = "lacing_section_dim"
+KEY_DISP_LACING_SECTION_DIM = "Lacing Section Dimension"
+
+# Compressive & Tensile Strength
+KEY_COMPRESSION_STRENGTH = "compression_strength"
+KEY_DISP_COMPRESSION_STRENGTH = "Design Compressive Strength (kN)"
+
+KEY_TENSION_STRENGTH = "tensile_strength"
+KEY_DISP_TENSION_STRENGTH = "Design Tensile Strength (kN)"
+
+# Connection Details
+KEY_WELD_LENGTH = "weld_length"
+KEY_DISP_WELD_LENGTH = "Required Weld Length (mm)"
+
+KEY_BOLT_COUNT = "bolt_count"
+KEY_DISP_BOLT_COUNT = "Number of Bolts Required"
+
 
 # ---------------------
 # VALIDATORS

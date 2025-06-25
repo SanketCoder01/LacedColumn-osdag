@@ -239,28 +239,33 @@ class ColumnDesign(Member):
     def module_name(self):
         return KEY_DISP_COMPRESSION_COLUMN
 
-    def set_osdaglogger(key):
-        """
-        Set logger for Column Design Module.
-        """
+    def set_osdaglogger(widget_or_key=None):
+        import logging
         global logger
         logger = logging.getLogger('Osdag')
-
         logger.setLevel(logging.DEBUG)
         handler = logging.StreamHandler()
         formatter = logging.Formatter(fmt='%(asctime)s - %(name)s - %(levelname)s - %(message)s', datefmt='%Y-%m-%d %H:%M:%S')
-
         handler.setFormatter(formatter)
         logger.addHandler(handler)
         handler = logging.FileHandler('logging_text.log')
-
-        formatter = logging.Formatter(fmt='%(asctime)s - %(name)s - %(levelname)s - %(message)s', datefmt='%Y-%m-%d %H:%M:%S')
         handler.setFormatter(formatter)
         logger.addHandler(handler)
-
-        if key is not None:
-            handler = OurLog(key)
-            formatter = logging.Formatter(fmt='%(asctime)s - %(name)s - %(levelname)s - %(message)s', datefmt='%Y-%m-%d %H:%M:%S')
+        # Add QTextEdit logger if widget is provided
+        if widget_or_key is not None and hasattr(widget_or_key, 'append'):
+            class QTextEditLogger(logging.Handler):
+                def __init__(self, text_edit):
+                    super().__init__()
+                    self.text_edit = text_edit
+                def emit(self, record):
+                    msg = self.format(record)
+                    self.text_edit.append(msg)
+            qtext_handler = QTextEditLogger(widget_or_key)
+            qtext_handler.setFormatter(formatter)
+            logger.addHandler(qtext_handler)
+        elif widget_or_key is not None:
+            # If it's a key, use your existing OurLog logic
+            handler = OurLog(widget_or_key)
             handler.setFormatter(formatter)
             logger.addHandler(handler)
 
@@ -708,19 +713,19 @@ class ColumnDesign(Member):
             trial_section = section.strip("'")
 
             # fetching the section properties
-            if self.sec_profile == VALUES_SEC_PROFILE[0]:  # Beams and columns
+            if self.sec_profile == KEY_LACEDCOL_SEC_PROFILE_OPTIONS[0]:  # Beams and columns
                 try:
                     result = Beam(designation=trial_section, material_grade=self.material)
                 except:
                     result = Column(designation=trial_section, material_grade=self.material)
                 self.section_property = result
-            elif self.sec_profile == VALUES_SEC_PROFILE[1]:  # RHS and SHS
+            elif self.sec_profile == KEY_LACEDCOL_SEC_PROFILE_OPTIONS[1]:  # RHS and SHS
                 try:
                     result = RHS(designation=trial_section, material_grade=self.material)
                 except:
                     result = SHS(designation=trial_section, material_grade=self.material)
                 self.section_property = result
-            elif self.sec_profile == VALUES_SEC_PROFILE[2]:  # CHS
+            elif self.sec_profile == KEY_LACEDCOL_SEC_PROFILE_OPTIONS[2]:  # CHS
                 self.section_property = CHS(designation=trial_section, material_grade=self.material)
             else:
                 self.section_property = Column(designation=trial_section, material_grade=self.material)
@@ -730,7 +735,7 @@ class ColumnDesign(Member):
                                                                     max(self.section_property.flange_thickness, self.section_property.web_thickness))
 
             # section classification
-            if (self.sec_profile == VALUES_SEC_PROFILE[0]):  # Beams and Columns
+            if (self.sec_profile == KEY_LACEDCOL_SEC_PROFILE_OPTIONS[0]):  # Beams and Columns
 
                 if self.section_property.type == 'Rolled':
                     self.flange_class = IS800_2007.Table2_i((self.section_property.flange_width / 2), self.section_property.flange_thickness,
@@ -747,7 +752,7 @@ class ColumnDesign(Member):
                             self.section_property.flange_thickness + self.section_property.root_radius)) / self.section_property.web_thickness
                 flange_ratio = self.section_property.flange_width / 2 / self.section_property.flange_thickness
 
-            elif (self.sec_profile == VALUES_SEC_PROFILE[1]):  # RHS and SHS
+            elif (self.sec_profile ==KEY_LACEDCOL_SEC_PROFILE_OPTIONS[1]):  # RHS and SHS
                 self.flange_class = IS800_2007.Table2_iii((self.section_property.depth - (2 * self.section_property.flange_thickness)),
                                                           self.section_property.flange_thickness, self.material_property.fy,
                                                           classification_type='Axial compression')
@@ -756,7 +761,7 @@ class ColumnDesign(Member):
                             self.section_property.flange_thickness + self.section_property.root_radius)) / self.section_property.web_thickness
                 flange_ratio = self.section_property.flange_width / 2 / self.section_property.flange_thickness
 
-            elif self.sec_profile == VALUES_SEC_PROFILE[2]:  # CHS
+            elif self.sec_profile ==KEY_LACEDCOL_SEC_PROFILE_OPTIONS[2]:  # CHS
                 self.flange_class = IS800_2007.Table2_x(self.section_property.out_diameter, self.section_property.flange_thickness,
                                                         self.material_property.fy, load_type='axial compression')
                 self.web_class = self.flange_class  #Why?
@@ -893,20 +898,20 @@ class ColumnDesign(Member):
             for section in self.input_section_list:  # iterating the design over each section to find the most optimum section
 
                 # fetching the section properties of the selected section
-                if self.sec_profile == VALUES_SEC_PROFILE[0]:  # Beams and columns
+                if self.sec_profile == KEY_LACEDCOL_SEC_PROFILE_OPTIONS[0]:  # Beams and columns
                     try:
                         result = Beam(designation=section, material_grade=self.material)
                     except:
                         result = Column(designation=section, material_grade=self.material)
                     self.section_property = result
-                elif self.sec_profile == VALUES_SEC_PROFILE[1]:  # RHS and SHS
+                elif self.sec_profile == KEY_LACEDCOL_SEC_PROFILE_OPTIONS[1]:  # RHS and SHS
                     try:
                         result = RHS(designation=section, material_grade=self.material)
                     except:
                         result = SHS(designation=section, material_grade=self.material)
                     self.section_property = result
 
-                elif self.sec_profile == VALUES_SEC_PROFILE[2]:  # CHS
+                elif self.sec_profile == KEY_LACEDCOL_SEC_PROFILE_OPTIONS[2]:  # CHS
                     self.section_property = CHS(designation=section, material_grade=self.material)
                 else:   #Why?
                     self.section_property = Column(designation=section, material_grade=self.material)
@@ -927,11 +932,11 @@ class ColumnDesign(Member):
                 self.section_class = self.input_section_classification[section][0]
 
                 if self.section_class == 'Slender':
-                    if (self.sec_profile == VALUES_SEC_PROFILE[0]):  # Beams and Columns
+                    if (self.sec_profile == KEY_LACEDCOL_SEC_PROFILE_OPTIONS[0]):  # Beams and Columns
                         self.effective_area = (2 * ((31.4 * self.epsilon * self.section_property.flange_thickness) *
                                                     self.section_property.flange_thickness)) + \
                                             (2 * ((21 * self.epsilon * self.section_property.web_thickness) * self.section_property.web_thickness))
-                    elif (self.sec_profile == VALUES_SEC_PROFILE[1]):
+                    elif (self.sec_profile == KEY_LACEDCOL_SEC_PROFILE_OPTIONS[1]):
                         self.effective_area = (2 * 21 * self.epsilon * self.section_property.flange_thickness) * 2
                 else:
                     self.effective_area = self.section_property.area  # mm2
@@ -949,7 +954,7 @@ class ColumnDesign(Member):
                 # Step 2 - computing the design compressive stress
 
                 # 2.1 - Buckling curve classification and Imperfection factor
-                if (self.sec_profile == VALUES_SEC_PROFILE[0]):  # Beams and Columns
+                if (self.sec_profile == KEY_LACEDCOL_SEC_PROFILE_OPTIONS[0]):  # Beams and Columns
 
                     if self.section_property.type == 'Rolled':
                         self.buckling_class_zz = IS800_2007.cl_7_1_2_2_buckling_class_of_crosssections(self.section_property.flange_width,

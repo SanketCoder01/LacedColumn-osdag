@@ -16,6 +16,7 @@ from PyQt5.QtCore import pyqtSlot
 from PyQt5.QtWidgets import QDialog
 from ..get_DPI_scale import scale
 #from .ui_template import *
+from osdag.gusset_connection import connectdb  # Add this import at the top if not present
 
 
 class My_ListWidget(QListWidget):
@@ -169,49 +170,36 @@ class Ui_Popup(object):
             self.listWidget_2.addItem(self.listWidget.takeItem(0))
 
 
-    def addAvailableItems(self,items,KEY_EXISTINGVAL_CUSTOMIZED):
-        # Function to addItems from one listWidget to another
-
-        # @author : Amir
-
+    def addAvailableItems(self, items, profile_name, disabled_values=None):
+        """
+        Add items to the available/selected lists, fetching section designations from the database for the given profile_name.
+        'items' can be a list or a single value. 'profile_name' is the section profile (e.g., 'Beams', 'Columns', etc.).
+        'disabled_values' is a list of values to disable in the widget.
+        """
+        if disabled_values is None:
+            disabled_values = []
         self.listWidget_2.clear()
-        #self.listWidget_2.addItems(items)
-        if items not in KEY_EXISTINGVAL_CUSTOMIZED:
-            for item in KEY_EXISTINGVAL_CUSTOMIZED:
-                # self.listWidget_2.addItems(KEY_EXISTINGVAL_CUSTOMIZED)
-                if item in self.disabled_values:
-                    continue
-                self.listWidget_2.addItem(item)
-
-            a = list(set(items) - set(KEY_EXISTINGVAL_CUSTOMIZED))
-            for item_a in list(set(a + self.disabled_values)):
-                self.listWidget.addItem(item_a)
-            # self.listWidget.addItems(a)
+        self.listWidget.clear()
+        # Fetch all designations for the profile from the database
+        db_values = connectdb(profile_name, call_type="popup")
+        # If items is a list, add those in db_values to selected, rest to available
+        if isinstance(items, list):
+            for it in db_values:
+                if it in items:
+                    self.listWidget_2.addItem(it)
+                elif it not in disabled_values:
+                    self.listWidget.addItem(it)
         else:
-            for it in items:
-                self.listWidget_2.addItem(it)
-
+            # items is a single value
+            for it in db_values:
+                if it == items:
+                    self.listWidget_2.addItem(it)
+                elif it not in disabled_values:
+                    self.listWidget.addItem(it)
+        # Disable items as needed
         for all_items in [self.listWidget.item(i) for i in range(self.listWidget.count())]:
-            if all_items.text() in self.disabled_values:
+            if all_items.text() in disabled_values:
                 all_items.setFlags(QtCore.Qt.NoItemFlags)
-
-            # self.listWidget_2.addItems(items)
-    # def addAvailableItems1(self,items1,KEY_EXISTINGVAL_CUSTOMIZED):
-    #     self.listWidget_2.clear()
-    #     if items1 != KEY_EXISTINGVAL_CUSTOMIZED and KEY_EXISTINGVAL_CUSTOMIZED != []:
-    #         self.listWidget_2.addItems(KEY_EXISTINGVAL_CUSTOMIZED)
-    #     else:
-    #         self.listWidget_2.addItems(items1)
-
-    # def get_left_elements(self):
-    #     r = []
-    #     for i in range(self.listWidget.count()):
-    #         it = self.listWidget.item(i)
-    #
-    #         r.append(it.text())
-    #         r[i] = int(r[i])
-    #     r.sort()
-    #     return r
 
     def get_right_elements(self):
 

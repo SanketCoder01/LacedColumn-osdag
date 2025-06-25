@@ -530,7 +530,7 @@ class Member(Main):
                     area = str(Angle_attributes.calc_Area(a, b, thickness, l))
                     mom_inertia_z = str(Angle_attributes.calc_MomentOfAreaZ(a, b, thickness, l, plate_thk))
                     mom_inertia_y = str(Angle_attributes.calc_MomentOfAreaY(a, b, thickness, l, plate_thk))
-                    mom_inertia_u = str(Angle_attributes.calc_MomentOfAreaU(a, b, thickness, l, plate_thk))
+                    mom_inertia_u = str(Angle_attributes.calc_MomentOfAreaY(a, b, thickness, l, plate_thk))
                     mom_inertia_v = str(Angle_attributes.calc_MomentOfAreaV(a, b, thickness, l, plate_thk))
                     rad_of_gy_z = str(Angle_attributes.calc_RogZ(a, b, thickness, l, plate_thk))
                     rad_of_gy_y = str(Angle_attributes.calc_RogY(a, b, thickness, l, plate_thk))
@@ -3233,8 +3233,9 @@ class Member(Main):
 
 
     def new_material(self, *args, **kwargs):
-        selected_material = self[0]
-        if selected_material in ["Custom","Custom Section"]:
+        # Fix: do not use self[...] as self is not a dict
+        # Instead, check if the first argument is a string and matches 'Custom' or 'Custom Section'
+        if args and args[0] in ["Custom", "Custom Section"]:
             return True
         else:
             return False

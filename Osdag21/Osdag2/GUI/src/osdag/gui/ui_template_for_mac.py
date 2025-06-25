@@ -215,7 +215,7 @@ class Window(QMainWindow):
         self.window = QtWidgets.QDialog()
         self.ui = Ui_Popup()
         self.ui.setupUi(self.window, disabled_values, note)
-        self.ui.addAvailableItems(op, KEYEXISTING_CUSTOMIZED)
+        self.ui.addAvailableItems(op, 'profile_name')  # TODO: Replace 'profile_name' with the actual profile variable
         self.window.exec()
         return self.ui.get_right_elements()
 
@@ -1619,12 +1619,13 @@ class Window(QMainWindow):
                     titles.append(key)
 
                 key = option[1]
-                if self.output_title_fields[key][1] == 0:
-                    no_field_titles.append(key)
-                if key in no_field_titles:
-                    visible_fields = 1
-                else:
-                    visible_fields = 0
+                if key in self.output_title_fields and isinstance(self.output_title_fields[key], (list, tuple)) and len(self.output_title_fields[key]) > 1:
+                    if self.output_title_fields[key][1] == 0:
+                        no_field_titles.append(key)
+                        if key in no_field_titles:
+                            visible_fields = 1
+                        else:
+                            visible_fields = 0
 
             if option[2] == TYPE_TEXTBOX:
                 if self.dockWidgetContents_out.findChild(QtWidgets.QWidget, option[0]).isVisible():

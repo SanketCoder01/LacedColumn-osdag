@@ -574,19 +574,19 @@ class Plate(Material):
                                           gauge, web_thickness, root_radius):  # todo anjalinew
 
         # max_bolts_one_line = int(((flange_plate_h_max - (2 * edge_dist)) / gauge) + 1)
-        # print("max_bolts_one_line", max_bolts_one_line)
+
         possible_bolt = (flange_plate_h_max / 2 - web_thickness / 2 - 2 * edge_dist) - root_radius
         if possible_bolt > 0:
             bolt_one_side = int(possible_bolt / gauge + 1)
             max_bolts_one_line = 2 * bolt_one_side
-            print("max bolt one line", max_bolts_one_line)
+
 
             if max_bolts_one_line >= 2:
-                print("bolts_required", bolts_required)
+
                 bolt_line = max(int(math.ceil((float(bolts_required) / float(max_bolts_one_line)))), 1)
                 bolts_one_line = min(round_up(int(math.ceil(float(bolts_required) / float(bolt_line))), 2, 2),
                                      max_bolts_one_line)
-                print("bbbb1", bolt_line, bolts_one_line)
+
                 # if bolts_one_line % 2 == 1:
                 #     bolts_one_line = bolts_one_line-1
                 #     bolt_line =bolt_line  +1
@@ -594,7 +594,7 @@ class Plate(Material):
                 #     pass
 
                 height = flange_plate_h_max
-                print("bbbb", bolt_line, bolts_one_line, height)
+
                 #     self.get_flange_plate_h_req(self.bolts_one_line, gauge, edge_dist, web_thickness, root_radius))
                 return bolt_line, bolts_one_line, height
             # if max_bolts_one_line >= 2:
@@ -716,7 +716,7 @@ class Plate(Material):
         tmv = moment_demand * xmax / sigma_r_sq
         abh = axial_load / (bolts_one_line * bolt_line)
         vres = math.sqrt((vbv + tmv) ** 2 + (tmh + abh) ** 2)
-        print('rsq,vres', sigma_r_sq, vres)
+
         self.ymax = ymax
         self.xmax = xmax
         self.sigma_r_sq = sigma_r_sq
@@ -744,7 +744,7 @@ class Plate(Material):
             self.length_avail = max(((bolts_one_line - 1) * gauge), ((bolts_line - 1) * pitch))
             if self.length_avail > 15 * bolt_dia:
                 self.beta_lj = 1.075 - self.length_avail / (200 * bolt_dia)
-                print('long joint case')
+
                 if self.beta_lj > 1:
                     self.beta_lj = 1.0
                 elif self.beta_lj < 0.75:
@@ -772,7 +772,7 @@ class Plate(Material):
                 else:
                     self.beta_lj =  round(self.beta_lj, 2)
                 bolt_capacity_red = round( self.beta_lj, 2) * bolt_capacity
-                print('beta', round( self.beta_lj, 2))
+
             else:
                 self.beta_lj = 1.0
                 bolt_capacity_red = bolt_capacity
@@ -891,8 +891,8 @@ class Plate(Material):
 
             while (bolt_line <= bolt_line_limit and vres > bolt_capacity_red) or web_plate_h == False:
                 if web_plate_h is not False:
-                    print("entered web plate details loop for bolt force:", vres, "bolt capaity reduced:",
-                          bolt_capacity_red)
+
+
                     [gauge, edge_dist, web_plate_h_recalc] = self.get_gauge_edge_dist(web_plate_h + 10, bolts_one_line,
                                                                                       min_edge_dist,
                                                                                       max_spacing, max_edge_dist)
@@ -949,8 +949,7 @@ class Plate(Material):
                 self.design_status = False
                 self.reason = "Bolt line limit is reached. Select higher grade/Diameter or choose different connection"
             else:
-                print("passed the web plate details loop for bolt force:", vres, "bolt capaity reduced:",
-                      bolt_capacity_red, "no. of bolts:", bolt_line * bolts_one_line, "height", web_plate_h)
+                
                 self.design_status = True
 
             self.length = gap + end_dist * 2 + pitch * (bolt_line - 1)
@@ -996,9 +995,9 @@ class Plate(Material):
                                                                                              bolts_required,
                                                                                              min_edge_dist, min_gauge,
                                                                                              web_thickness, root_radius)
-        print("flange", bolt_line, bolts_one_line)
 
-        print("boltdetails0", bolt_line, bolts_one_line, flange_plate_h)
+
+
 
         if bolts_one_line == 1 or bolts_one_line == 0:
             self.design_status = False
@@ -1007,11 +1006,11 @@ class Plate(Material):
             self.design_status = False
             self.reason = "Bolt line limit is reached. Select higher grade/Diameter or choose different connection."
         else:
-            print("boltdetails", bolt_line, bolts_one_line, flange_plate_h)
+
             [gauge, edge_dist, flange_plate_h] = \
                 self.get_gauge_edge_dist_flange(flange_plate_h, bolts_one_line, min_edge_dist, max_spacing,
                                                 max_edge_dist, web_thickness, root_radius)
-            print("boltdetails2", bolt_line, bolts_one_line, flange_plate_h)
+
             if bolt_line == 1:
                 pitch = 0.0
             else:
@@ -1044,7 +1043,7 @@ class Plate(Material):
                                                                                      min_edge_dist, max_spacing,
                                                                                      max_edge_dist, web_thickness,
                                                                                      root_radius)
-                print("boltdetailsasaa", bolt_line, bolts_one_line, flange_plate_h)
+
                 if bolt_line == 1:
                     pitch = 0.0
                 else:
@@ -1059,7 +1058,7 @@ class Plate(Material):
                                                           gauge, bolt_line, pitch, bolt_capacity,
                                                           bolt_dia, end_dist, gap, edge_dist, root_radius,
                                                           web_thickness,beta_lg= beta_lg)
-                print("boltforce", vres, bolt_capacity_red)
+
                 # convergence = bolt_capacity_red - vres
                 #
                 # if convergence < 0:
@@ -1264,14 +1263,14 @@ class Plate(Material):
 class ISection(Material):
 
     def __init__(self, designation, material_grade="", table=""):
-        print(f"DEBUG: Creating ISection with designation='{designation}', material_grade='{material_grade}', table='{table}'")
+
         if table == "":
             beams_list = connectdb("Beams", "popup")
             columns_list = connectdb("Columns", "popup")
-            print(f"DEBUG: Available sections in Beams: {beams_list}")
-            print(f"DEBUG: Available sections in Columns: {columns_list}")
+
+
             table = "Beams" if designation in beams_list else "Columns"
-            print(f"DEBUG: Selected table: {table}")
+
         self.connect_to_database_update_other_attributes(table, designation, material_grade)
         self.design_status = True
         self.designation = designation
@@ -1319,13 +1318,13 @@ class ISection(Material):
         row = cur.fetchone()
         
         if row is None:
-            print(f"DEBUG: Tried to find designation '{designation}' in table '{table}' and failed.")
-            print("DEBUG: Available designations in this table are:")
+
+
             cur.execute(f"SELECT Designation FROM {table}")
             available = [r[0] for r in cur.fetchall()]
-            print(available)
+
             if available:
-                print(f"WARNING: Section '{designation}' not found in '{table}'. Using first available section '{available[0]}' as fallback.")
+
                 designation = available[0]
                 cur.execute(db_query, (designation,))
                 row = cur.fetchone()
@@ -1656,8 +1655,133 @@ class Channel(Material):
         self.Iw =  row[21] * 10 ** 6
         self.source = row[22]
         self.type = 'Rolled' if row[23] is None else row[23]
+    
+class BackToBackChannelLaced(Material):
+    def __init__(self, designation, material_grade):
+        self.connect_to_database_update_other_attributes(designation, material_grade)
+        self.profile_type = 'BackToBackChannelLaced'
+        self.rmin = min(self.rad_of_gy_y, self.rad_of_gy_z)
 
+    def connect_to_database_update_other_attributes(self, designation, material_grade):
+        conn = sqlite3.connect(PATH_TO_DATABASE)
+        db_query = "SELECT * FROM Channels WHERE Designation = ?"
+        cur = conn.cursor()
+        cur.execute(db_query, (designation,))
+        row = cur.fetchone()
+        if row is None:
+            conn.close()
+            raise ValueError(f"Section designation '{designation}' not found in Channels database.")
+        self.designation = designation
+        self.mass = row[2]
+        self.area = row[3] * 100
+        self.depth = row[4]
+        self.flange_width = row[5]
+        self.web_thickness = row[6]
+        self.flange_thickness = row[7]
+        max_thickness = max(self.web_thickness, self.flange_thickness)
+        super(BackToBackChannelLaced, self).__init__(material_grade, max_thickness)
+        self.flange_slope = row[8]
+        self.root_radius = row[9]
+        self.toe_radius = row[10]
+        self.Cy = row[11] * 10
+        self.mom_inertia_z = row[12] * 10000
+        self.mom_inertia_y = row[13] * 10000
+        self.rad_of_gy_z = row[14] * 10
+        self.rad_of_gy_y = row[15] * 10
+        self.elast_sec_mod_z = row[16] * 1000
+        self.elast_sec_mod_y = row[17] * 1000
+        self.plast_sec_mod_z = row[18] * 1000
+        self.plast_sec_mod_y = row[19] * 1000
+        self.It = row[20] * 10**4
+        self.Iw = row[21] * 10**6
+        self.source = row[22]
+        self.type = 'Rolled' if row[23] is None else row[23]
         conn.close()
+
+class ToeToToeChannelLaced(Material):
+    def __init__(self, designation, material_grade):
+        self.connect_to_database_update_other_attributes(designation, material_grade)
+        self.profile_type = 'ToeToToeChannelLaced'
+        self.rmin = min(self.rad_of_gy_y, self.rad_of_gy_z)
+
+    def connect_to_database_update_other_attributes(self, designation, material_grade):
+        conn = sqlite3.connect(PATH_TO_DATABASE)
+        db_query = "SELECT * FROM Channels WHERE Designation = ?"
+        cur = conn.cursor()
+        cur.execute(db_query, (designation,))
+        row = cur.fetchone()
+        if row is None:
+            conn.close()
+            raise ValueError(f"Section designation '{designation}' not found in Channels database.")
+        self.designation = designation
+        self.mass = row[2]
+        self.area = row[3] * 100
+        self.depth = row[4]
+        self.flange_width = row[5]
+        self.web_thickness = row[6]
+        self.flange_thickness = row[7]
+        max_thickness = max(self.web_thickness, self.flange_thickness)
+        super(ToeToToeChannelLaced, self).__init__(material_grade, max_thickness)
+        self.flange_slope = row[8]
+        self.root_radius = row[9]
+        self.toe_radius = row[10]
+        self.Cy = row[11] * 10
+        self.mom_inertia_z = row[12] * 10000
+        self.mom_inertia_y = row[13] * 10000
+        self.rad_of_gy_z = row[14] * 10
+        self.rad_of_gy_y = row[15] * 10
+        self.elast_sec_mod_z = row[16] * 1000
+        self.elast_sec_mod_y = row[17] * 1000
+        self.plast_sec_mod_z = row[18] * 1000
+        self.plast_sec_mod_y = row[19] * 1000
+        self.It = row[20] * 10**4
+        self.Iw = row[21] * 10**6
+        self.source = row[22]
+        self.type = 'Rolled' if row[23] is None else row[23]
+        conn.close()
+
+class DoubleGirderLaced(Material):
+    def __init__(self, designation, material_grade):
+        self.connect_to_database_update_other_attributes(designation, material_grade)
+        self.profile_type = 'DoubleGirderLaced'
+        self.rmin = min(self.rad_of_gy_y, self.rad_of_gy_z)
+
+    def connect_to_database_update_other_attributes(self, designation, material_grade):
+        conn = sqlite3.connect(PATH_TO_DATABASE)
+        db_query = "SELECT * FROM Channels WHERE Designation = ?"
+        cur = conn.cursor()
+        cur.execute(db_query, (designation,))
+        row = cur.fetchone()
+        if row is None:
+            conn.close()
+            raise ValueError(f"Section designation '{designation}' not found in Channels database.")
+        self.designation = designation
+        self.mass = row[2]
+        self.area = row[3] * 100
+        self.depth = row[4]
+        self.flange_width = row[5]
+        self.web_thickness = row[6]
+        self.flange_thickness = row[7]
+        max_thickness = max(self.web_thickness, self.flange_thickness)
+        super(DoubleGirderLaced, self).__init__(material_grade, max_thickness)
+        self.flange_slope = row[8]
+        self.root_radius = row[9]
+        self.toe_radius = row[10]
+        self.Cy = row[11] * 10
+        self.mom_inertia_z = row[12] * 10000
+        self.mom_inertia_y = row[13] * 10000
+        self.rad_of_gy_z = row[14] * 10
+        self.rad_of_gy_y = row[15] * 10
+        self.elast_sec_mod_z = row[16] * 1000
+        self.elast_sec_mod_y = row[17] * 1000
+        self.plast_sec_mod_z = row[18] * 1000
+        self.plast_sec_mod_y = row[19] * 1000
+        self.It = row[20] * 10**4
+        self.Iw = row[21] * 10**6
+        self.source = row[22]
+        self.type = 'Rolled' if row[23] is None else row[23]
+        conn.close()
+
 
     def min_plate_height(self):
         return 0.6 * self.depth
@@ -1837,10 +1961,9 @@ class Channel(Material):
     def design_check_for_slenderness(self, K, L, r):
         "KL= effective length of member"
         "r = radius of gyration of member"
-
         slender = (float(K) * float(L)) / float(r)
-
         self.slenderness = round(slender, 2)
+        return self.slenderness
 
     def plastic_moment_capacty(self, beta_b, Z_p, fy):
         gamma_m0 = IS800_2007.cl_5_4_1_Table_5["gamma_m0"]['yielding']
@@ -1868,7 +1991,7 @@ class Angle(Material):
         db_query = "SELECT * FROM Angles WHERE Designation = ?"
         cur = conn.cursor()
 
-        # print(f" Component.py connect_to_database_update_other_attributes \n designation{designation} \n material_grade{material_grade}")
+
         cur.execute(db_query, (designation,))
         row = cur.fetchone()
 
@@ -1907,7 +2030,7 @@ class Angle(Material):
         self.It = row[24] * 10 ** 4
         self.source = row[25]
         self.type = 'Rolled' if row[26] is None else row[26]
-        # print(f"\n connect_to_database_update_other_attributes done")
+
 
         conn.close()
 
@@ -1936,10 +2059,10 @@ class Angle(Material):
             if operator.le(max(leg_a_length, leg_b_length), max_leg_length_outer) and operator.ge(
                     min(leg_a_length, leg_b_length), min_leg_length_outer) and leg_a_length == leg_b_length \
                     and operator.eq(t, t_min):
-                # print("appended", designation)
+
                 available_angles.append(designation)
             else:
-                print("popped", designation)
+                print(0)
         return available_angles
 
     def tension_member_yielding(self, A_g, F_y):
@@ -2188,6 +2311,7 @@ class RHS(HollowSection):
 class CHS(Material):
 
     def __init__(self, designation, material_grade):
+        self.designation = designation
         self.connect_to_database_update_other_attributes(designation, material_grade)
         self.type = "Rolled"
 

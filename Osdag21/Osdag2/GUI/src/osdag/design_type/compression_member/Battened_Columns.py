@@ -236,30 +236,37 @@ class BattenedColumn(Member):
         # If unknown profile type selected
         return [""]
     
-    def set_osdaglogger(self, widget):
+    def set_osdaglogger(self, widget_or_key=None):
         """Function to set Logger for BattenedColumn Module"""
-        key = 'BattenColumn'
-        logger = logging.getLogger(f'Osdag.{key}')  
-        logger.setLevel(logging.ERROR)
-        logger.disabled = True  # Disable all logging
-
-        if not logger.hasHandlers():  # Prevent duplicate handlers
-            # Remove all existing handlers
-            for handler in logger.handlers[:]:
-                logger.removeHandler(handler)
-                
-            # Only add file handler for errors
-            file_handler = logging.FileHandler(f'{key.lower()}_log.txt')
-            file_handler.setLevel(logging.ERROR)
-            formatter = logging.Formatter(fmt='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-                                        datefmt='%Y-%m-%d %H:%M:%S')
-            file_handler.setFormatter(formatter)
-            logger.addHandler(file_handler)
-
-            # Disable propagation to parent loggers
-            logger.propagate = False
-            
-            self.logger = logger
+        import logging
+        global logger
+        logger = logging.getLogger('Osdag')
+        logger.setLevel(logging.DEBUG)
+        handler = logging.StreamHandler()
+        formatter = logging.Formatter(fmt='%(asctime)s - %(name)s - %(levelname)s - %(message)s', datefmt='%Y-%m-%d %H:%M:%S')
+        handler.setFormatter(formatter)
+        logger.addHandler(handler)
+        handler = logging.FileHandler('logging_text.log')
+        handler.setFormatter(formatter)
+        logger.addHandler(handler)
+        # Add QTextEdit logger if widget is provided
+        if widget_or_key is not None and hasattr(widget_or_key, 'append'):
+            class QTextEditLogger(logging.Handler):
+                def __init__(self, text_edit):
+                    super().__init__()
+                    self.text_edit = text_edit
+                def emit(self, record):
+                    msg = self.format(record)
+                    self.text_edit.append(msg)
+            qtext_handler = QTextEditLogger(widget_or_key)
+            qtext_handler.setFormatter(formatter)
+            logger.addHandler(qtext_handler)
+        elif widget_or_key is not None:
+            # If it's a key, use your existing OurLog logic
+            handler = OurLog(widget_or_key)
+            handler.setFormatter(formatter)
+            logger.addHandler(handler)
+        self.logger = logger
         return logger
     
 

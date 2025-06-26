@@ -412,23 +412,74 @@ class LacedColumn(Member):
 
     def customized_input(self, *args, **kwargs):
         c_lst = []
-        t1 = (KEY_SECSIZE, self.fn_profile_section)
+        # Section Designation ComboBox with All/Customized
+        t1 = (KEY_SECSIZE, self.fn_section_designation)
         c_lst.append(t1)
         return c_lst
+
+    def fn_section_designation(self, *args):
+        # This function is called when the Section Size ComboBox (All/Customized) changes
+        # args[0] is the selected profile, args[1] is 'All' or 'Customized'
+        if len(args) == 1 and isinstance(args[0], list):
+            args = args[0]
+        profile = args[0] if len(args) > 0 else None
+        mode = args[1] if len(args) > 1 else 'All'
+        if mode == 'All':
+            # Return all designations from DB for the selected profile
+            result = self.fn_profile_section(profile)
+            if not isinstance(result, list):
+                result = [result] if result else []
+            self.logger.info(f"Section designation (All) for profile '{profile}': {result}")
+            return result
+        elif mode == 'Customized':
+            # Open popup dialog for user to select
+            # Fetch all designations for the selected profile from the database
+            section_list = self.fn_profile_section(profile)
+            dialog = SectionDesignationDialog(section_list)
+            # Optionally, pre-select current values if available
+            current_selected = self.sec_list if hasattr(self, 'sec_list') and self.sec_list else []
+            if current_selected:
+                dialog.list_widget.clearSelection()
+                for i in range(dialog.list_widget.count()):
+                    if dialog.list_widget.item(i).text() in current_selected:
+                        dialog.list_widget.item(i).setSelected(True)
+            if dialog.exec_() == QDialog.Accepted:
+                selected = dialog.get_selected()
+                if not isinstance(selected, list):
+                    selected = [selected] if selected else []
+                self.logger.info(f"Section designation (Customized) selected: {selected}")
+                return selected
+            else:
+                self.logger.info("Section designation dialog cancelled; returning previous selection or empty list.")
+                return current_selected if current_selected else []
+        else:
+            return []
+
+    def open_section_designation_dialog(self, selected_profile, current_selected=None, disabled_values=None):
+        if disabled_values is None:
+            disabled_values = []
+        section_list = connectdb(selected_profile, call_type="popup")
+        dialog = SectionDesignationDialog(section_list)
+        if current_selected:
+            dialog.list_widget.clearSelection()
+            for i in range(dialog.list_widget.count()):
+                if dialog.list_widget.item(i).text() in current_selected:
+                    dialog.list_widget.item(i).setSelected(True)
+        if dialog.exec_() == QDialog.Accepted:
+            selected = dialog.get_selected()
+            self.sec_list = selected
+            return selected
+        return None
 
     def input_values(self, *args, **kwargs):
         """ 
         Function declared in ui_template.py line 566
-
         Fuction to return a list of tuples to be displayed as the UI (Input Dock)
-        
-        eg:[(None, 'Section Property', 'Title', None, True, 'No Validator'), ('Module', 'Pure Axial Column Design', 'Window Title', None, True, 'No Validator'), ('Member.Profile', 'Section Profile*', 'ComboBox', ['Beams', 'Columns', 'RHS', 'SHS', 'CHS', 'Angles', 'Back to Back Angles', 'Channels', 'Back to Back Channels'], True, 'No Validator'), ('Member.Designation', 'Section Size*', 'ComboBox_Customized', ['All', 'Customized'], True, 'No Validator'), ('Material', 'Material', 'ComboBox', ['E 165 (Fe 290)', 'E 250 (Fe 410 W)A', 'E 250 (Fe 410 W)B', 'E 250 (Fe 410 W)C', 'E 300 (Fe 440)', 'E 350 (Fe 490)', 'E 410 (Fe 540)', 'E 450 (Fe 570)D', 'E 450 (Fe 590) E', 'Cus_400_500_600_1400', 'Custom'], True, 'No Validator'), (None, 'Section Data', 'Title', None, True, 'No Validator'), ('Actual.Length_zz', 'Actual Length (z-z), mm', 'TextBox', None, True, 'Int Validator'), ('Actual.Length_yy', 'Actual Length (y-y), mm', 'TextBox', None, True, 'Int Validator'), (None, 'End Condition', 'Title', None, True, 'No Validator'), ('End_1', 'End 1', 'ComboBox', ['Fixed', 'Free', 'Hinged', 'Roller'], True, 'No Validator'), ('End_2', 'End 2', 'ComboBox', ['Fixed', 'Free', 'Hinged', 'Roller'], True, 'No Validator'), ('Image', None, 'Image_compression', str(files("osdag.data.ResourceFiles.images").joinpath("6.RRRR.PNG")), True, 'No Validator'), (None, 'Factored Loads', 'Title', None, True, 'No Validator'), ('Load.Axial', 'Axial Force (kN)', 'TextBox', None, True, 'Int Validator')]
         """
-
         self.module = KEY_DISP_LACEDCOL
         options_list = []
 
-         # Module title and name
+        # Module title and name
         options_list.append((KEY_DISP_LACEDCOL, "Laced Column", TYPE_MODULE, [], True, 'No Validator'))
 
         # Section
@@ -437,23 +488,22 @@ class LacedColumn(Member):
         options_list.append(("title_Material", "Material Properties", TYPE_TITLE, None, True, 'No Validator'))
         options_list.append((KEY_MATERIAL, KEY_DISP_MATERIAL, TYPE_COMBOBOX, VALUES_MATERIAL, True, 'No Validator'))
 
+        # Section Designation ComboBox with All/Customized
+        options_list.append((KEY_SECSIZE, "Section Size", TYPE_COMBOBOX_CUSTOMIZED, ['All', 'Customized'], True, 'No Validator'))
+
         # Geometry
         options_list.append(("title_Geometry", "Geometry", TYPE_TITLE, None, True, 'No Validator'))
         options_list.append((KEY_UNSUPPORTED_LEN_YY, KEY_DISP_UNSUPPORTED_LEN_YY, TYPE_TEXTBOX, None, True, 'Float Validator'))
         options_list.append((KEY_UNSUPPORTED_LEN_ZZ, KEY_DISP_UNSUPPORTED_LEN_ZZ, TYPE_TEXTBOX, None, True, 'Float Validator'))
         options_list.append((KEY_END1, KEY_DISP_END1, TYPE_COMBOBOX_CUSTOMIZED, VALUES_END1, True, 'No Validator'))
         options_list.append((KEY_END2,KEY_DISP_END2, TYPE_COMBOBOX_CUSTOMIZED, VALUES_END2, True, 'No Validator'))
-        
         # Lacing
         options_list.append((KEY_LACING_PATTERN, "Lacing Pattern", TYPE_COMBOBOX, VALUES_LACING_PATTERN, True, 'No Validator'))
-         
         # Connection
         options_list.append((KEY_CONN_TYPE, "Type of Connection", TYPE_COMBOBOX, VALUES_CONNECTION_TYPE, True, 'No Validator'))
-
         # Load
         options_list.append(("title_Load", "Load Details", TYPE_TITLE, None, True, 'No Validator'))
         options_list.append((KEY_AXIAL, "Axial Load (kN)", TYPE_TEXTBOX, None, True, 'Float Validator'))
-
         return options_list
 
     def fn_profile_section(self, *args):
@@ -503,11 +553,6 @@ class LacedColumn(Member):
         elif val == 'Roller':
             return str(files("osdag.data.ResourceFiles.images").joinpath("4.RRFR.PNG"))
 
-    def fn_end2_image(self, *args):
-        if len(args) == 1 and isinstance(args[0], list):
-            args = args[0]
-        end1 = args[0] if len(args) > 0 else None
-        end2 = args[1] if len(args) > 1 else None
 
     def fn_end2_image(self, *args):
         if len(args) == 1 and isinstance(args[0], list):
@@ -962,14 +1007,30 @@ class LacedColumn(Member):
         self.mainmodule = 'Columns with known support conditions'
         self.sec_profile = design_dictionary.get(KEY_LACEDCOL_SEC_PROFILE, "")
         self.sec_list = design_dictionary.get(KEY_SECSIZE, [])
+        # Coerce sec_list to a list if it's a string
+        if isinstance(self.sec_list, str):
+            if self.sec_list and self.sec_list != 'Select Section':
+                self.sec_list = [self.sec_list]
+            else:
+                self.sec_list = []
+        elif not isinstance(self.sec_list, list):
+            self.sec_list = list(self.sec_list) if self.sec_list else []
         self.material = design_dictionary.get(KEY_SEC_MATERIAL, "")
         # Defensive checks for required fields
-        if not self.sec_list or self.sec_list in ['', [], 'Select Section']:
-            self.logger.error("Section list is missing or invalid.")
+        def is_valid_material(mat):
+            if isinstance(mat, list):
+                return any(m and m != 'Select Material' for m in mat)
+            return mat and mat != 'Select Material'
+        if not is_valid_material(self.material):
+            self.logger.error("Material is missing or invalid.")
             self.design_status = False
             return
-        if not self.material or self.material in ['', 'Select Material']:
-            self.logger.error("Material is missing or invalid.")
+        def is_valid_section(sec):
+            if isinstance(sec, list):
+                return any(s and s != 'Select Section' for s in sec)
+            return sec and sec != 'Select Section'
+        if not is_valid_section(self.sec_list):
+            self.logger.error(f"Section list is missing or invalid: {self.sec_list}")
             self.design_status = False
             return
         # section user data
@@ -1198,10 +1259,11 @@ class LacedColumn(Member):
                     
             # Optionally, upgrade borderline slender sections
             if self.section_class == 'Slender':
-                if flange_ratio is not None and web_ratio is not None:
-                    if flange_ratio <= 9.5 and web_ratio <= 79.5:
-                        self.logger.warning(f"Upgrading borderline Slender section '{trial_section}' to Semi-Compact.")
-                        self.section_class = 'Semi-Compact'
+                if (flange_ratio is not None and web_ratio is not None and
+                    isinstance(flange_ratio, (int, float)) and isinstance(web_ratio, (int, float)) and
+                    flange_ratio <= 9.5 and web_ratio <= 79.5):
+                    self.logger.info(f"Reclassifying borderline Slender section {trial_section} to Semi-Compact")
+                    self.section_class = 'Semi-Compact'
 
             # Log section classification details
             flange_ratio_str = f"{flange_ratio:.2f}" if flange_ratio is not None else "N/A"
@@ -1209,13 +1271,6 @@ class LacedColumn(Member):
             self.logger.info(
                 f"The section is {self.section_class}. The {trial_section} section has {flange_ratio_str} flange({self.flange_class}) and {web_ratio_str} web({self.web_class}). [Reference: Cl 3.7, IS 800:2007]"
             )
-
-            # Optional: Borderline slender override
-            if self.section_class == 'Slender':
-                if flange_ratio <= 9.5 and web_ratio <= 79.5:
-                    self.logger.info(f"Reclassifying borderline Slender section {trial_section} to Semi-Compact")
-                    self.section_class = 'Semi-Compact'
-
             # 2.2 - Effective length
             self.effective_length_zz = IS800_2007.cl_7_2_2_effective_length_of_prismatic_compression_members(
                 self.length_zz,
@@ -2036,7 +2091,7 @@ class LacedColumn(Member):
             return default
 
         if self.design_status:
-            if (self.design_status and self.failed_design_dict is None) or (not self.design_status and len(self.failed_design_dict)>0):
+            if (self.design_status and self.failed_design_dict is None) or (not self.design_status and self.failed_design_dict is not None and hasattr(self.failed_design_dict, '__len__') and len(self.failed_design_dict) > 0):
                 if self.sec_profile=='Columns' or self.sec_profile=='Beams' or self.sec_profile == VALUES_SEC_PROFILE[0]:
                     try:
                         result = Beam(designation=self.result_designation, material_grade=self.material)
@@ -2049,7 +2104,7 @@ class LacedColumn(Member):
                                         KEY_DISP_MATERIAL: self.section_property.material,
             #                                 KEY_DISP_APPLIED_AXIAL_FORCE: self.section_property.,
                                         KEY_REPORT_MASS: self.section_property.mass,
-                                        KEY_REPORT_AREA: round(self.section_property.area * 1e-2, 2),
+                                        KEY_REPORT_AREA: safe_round(self.section_property.area * 1e-2, 2),
                                         KEY_REPORT_DEPTH: self.section_property.depth,
                                         KEY_REPORT_WIDTH: self.section_property.flange_width,
                                         KEY_REPORT_WEB_THK: self.section_property.web_thickness,
@@ -2067,16 +2122,16 @@ class LacedColumn(Member):
                                         KEY_REPORT_ZPY: round(self.section_property.plast_sec_mod_y * 1e-3, 2)}
                 else:
                     #Update for section profiles RHS and SHS, CHS by making suitable elif condition.
-                    self.report_column = {KEY_DISP_COLSEC_REPORT: self.section_property.designation,
-                                        KEY_DISP_MATERIAL: self.section_property.material,
-                                        #                                 KEY_DISP_APPLIED_AXIAL_FORCE: self.section_property.,
-                                        KEY_REPORT_MASS: self.section_property.mass,
-                                        KEY_REPORT_AREA: round(self.section_property.area * 1e-2, 2),
-                                        KEY_REPORT_DEPTH: self.section_property.depth,
-                                        KEY_REPORT_WIDTH: self.section_property.flange_width,
-                                        KEY_REPORT_WEB_THK: self.section_property.web_thickness,
-                                        KEY_REPORT_FLANGE_THK: self.section_property.flange_thickness,
-                                        KEY_DISP_FLANGE_S_REPORT: self.section_property.flange_slope}
+                    self.report_column = {KEY_DISP_COLSEC_REPORT: getattr(self.section_property, 'designation', None),
+                                        KEY_DISP_MATERIAL: getattr(self.section_property, 'material', ''),
+                                        #                                 KEY_DISP_APPLIED_AXIAL_FORCE: getattr(self.section_property, 'applied_axial_force', ''),
+                                        KEY_REPORT_MASS: getattr(self.section_property, 'mass', ''),
+                                        KEY_REPORT_AREA: safe_round(getattr(self.section_property, 'area', 0) * 1e-2, 2),
+                                        KEY_REPORT_DEPTH: getattr(self.section_property, 'depth', ''),
+                                        KEY_REPORT_WIDTH: getattr(self.section_property, 'flange_width', ''),
+                                        KEY_REPORT_WEB_THK: getattr(self.section_property, 'web_thickness', ''),
+                                        KEY_REPORT_FLANGE_THK: getattr(self.section_property, 'flange_thickness', ''),
+                                        KEY_DISP_FLANGE_S_REPORT: getattr(self.section_property, 'flange_slope', '')}
 
 
                 self.report_input = \
@@ -2200,28 +2255,46 @@ class LacedColumn(Member):
                 self.report_check.append(t1)
                                 
                 t1 = (r'$\phi_{yy}$', ' ',
-                    cl_8_7_1_5_phi(self.result_IF_yy, round(self.non_dim_eff_sr_yy, 2), round(self.result_phi_yy, 2)),
+                    cl_8_7_1_5_phi(self.result_IF_yy, safe_round(self.non_dim_eff_sr_yy, 2), safe_round(self.result_phi_yy, 2)),
                     ' ')
                 self.report_check.append(t1)
 
                 t1 = (r'$\phi_{zz}$', ' ',
-                    cl_8_7_1_5_phi(self.result_IF_zz, round(self.non_dim_eff_sr_zz, 2), round(self.result_phi_zz, 2)),
+                    cl_8_7_1_5_phi(self.result_IF_zz, safe_round(self.non_dim_eff_sr_zz, 2), safe_round(self.result_phi_zz, 2)),
                     ' ')
                 self.report_check.append(t1)
 
                 t1 = (r'$F_{cd,yy} \, \left( \frac{N}{\text{mm}^2} \right)$', ' ',
-                    cl_8_7_1_5_Buckling(self.material_property.fy, self.gamma_m0, round(self.non_dim_eff_sr_yy, 2), round(self.result_phi_yy, 2), round(self.result_fcd_2, 2), round(self.result_fcd_yy, 2)),
+                    cl_8_7_1_5_Buckling(
+                        str(self.material_property.fy) if self.material_property.fy is not None else '',
+                        str(self.gamma_m0) if self.gamma_m0 is not None else '',
+                        str(safe_round(self.non_dim_eff_sr_yy, 2)),
+                        str(safe_round(self.result_phi_yy, 2)),
+                        str(safe_round(self.result_fcd_2, 2)),
+                        str(safe_round(self.result_fcd_yy, 2)),
+                    ),
                     ' ')
                 self.report_check.append(t1)
 
                 t1 = (r'$F_{cd,zz} \, \left( \frac{N}{\text{mm}^2} \right)$', ' ',
-                    cl_8_7_1_5_Buckling(self.material_property.fy, self.gamma_m0, round(self.non_dim_eff_sr_zz, 2), round(self.result_phi_zz, 2), round(self.result_fcd_2, 2), round(self.result_fcd_zz, 2)),
+                    cl_8_7_1_5_Buckling(
+                        str(self.material_property.fy) if self.material_property.fy is not None else '',
+                        str(self.gamma_m0) if self.gamma_m0 is not None else '',
+                        str(safe_round(self.non_dim_eff_sr_zz, 2)),
+                        str(safe_round(self.result_phi_zz, 2)),
+                        str(safe_round(self.result_fcd_2, 2)),
+                        str(safe_round(self.result_fcd_zz, 2)),
+                    ),
                     ' ')
                 self.report_check.append(t1)
 
+                # Defensive: check for None before division/round for result_capacity and result_fcd
+                cap = self.result_capacity if self.result_capacity is not None else 0.0
+                fcd = self.result_fcd if self.result_fcd is not None else 0.0
+                area = self.section_property.area if self.section_property and hasattr(self.section_property, 'area') else 0.0
                 t1 = (r'Design Compressive Strength (\( P_d \)) (For the most critical value of \( F_{cd} \))', self.load.axial_force * 10 ** -3,
-                            cl_7_1_2_design_compressive_strength(round(self.result_capacity / 1000, 2), self.section_property.area, round(self.result_fcd, 2),self.load.axial_force * 10 ** -3),
-                            get_pass_fail(self.load.axial_force * 10 ** -3, round(self.result_capacity, 2), relation="leq"))
+                    cl_7_1_2_design_compressive_strength(safe_round(cap / 1000, 2), area, safe_round(fcd, 2), self.load.axial_force * 10 ** -3),
+                    get_pass_fail(self.load.axial_force * 10 ** -3, safe_round(cap, 2), relation="leq"))
                 self.report_check.append(t1)
 
             else:
@@ -2330,4 +2403,40 @@ def safe_float(val):
     except Exception:
         return 0.0
 
-
+def get_fu_fy_I_section(self, *args):
+        """
+        Override to accept arguments as passed from tab_change (material, designation_dict).
+        Handles both single and multiple selections robustly.
+        """
+        if len(args) < 2:
+            return {}
+        material_grade = args[0]
+        designation_dict = args[1]
+        # Defensive: handle both dict and string for designation
+        designation = None
+        if isinstance(designation_dict, dict):
+            designation = designation_dict.get(KEY_SECSIZE, "Select Section")
+        elif isinstance(designation_dict, str):
+            designation = designation_dict
+        else:
+            designation = "Select Section"
+        # Handle multiple selections (list)
+        if isinstance(designation, list):
+            designation = designation[0] if designation else "Select Section"
+        if isinstance(material_grade, list):
+            material_grade = material_grade[0] if material_grade else "Select Material"
+        fu = ''
+        fy = ''
+        if material_grade != "Select Material" and designation != "Select Section":
+            table = "Beams" if designation in connectdb("Beams", "popup") else "Columns"
+            I_sec_attributes = ISection(designation)
+            I_sec_attributes.connect_to_database_update_other_attributes(table, designation, material_grade)
+            fu = str(I_sec_attributes.fu)
+            fy = str(I_sec_attributes.fy)
+        d = {KEY_SUPTNGSEC_FU: fu,
+             KEY_SUPTNGSEC_FY: fy,
+             KEY_SUPTDSEC_FU: fu,
+             KEY_SUPTDSEC_FY: fy,
+             KEY_SEC_FU: fu,
+             KEY_SEC_FY: fy}
+        return d

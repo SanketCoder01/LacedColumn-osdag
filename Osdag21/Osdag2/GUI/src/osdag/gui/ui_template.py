@@ -196,7 +196,7 @@ class Window(QMainWindow):
         self.window = QtWidgets.QDialog()
         self.ui = Ui_Popup()
         self.ui.setupUi(self.window, disabled_values, note)
-        self.ui.addAvailableItems(op, KEYEXISTING_CUSTOMIZED)
+        self.ui.addAvailableItems(op, 'profile_name')  # TODO: Replace 'profile_name' with the actual profile variable
         self.window.exec()
         return self.ui.get_right_elements()
 
@@ -1373,7 +1373,7 @@ class Window(QMainWindow):
         last_design_folder = os.path.join('ResourceFiles', 'last_designs')
         # Robust: try with main, else fallback to no argument
         try:
-            last_design_file = str(main.module_name(main)).replace(' ', '') + ".osi"
+            last_design_file = str(main.module_name()).replace(' ', '') + ".osi"
         except TypeError:
             last_design_file = str(main.module_name()).replace(' ', '') + ".osi"
         last_design_file = os.path.join(last_design_folder, last_design_file)
@@ -1398,7 +1398,9 @@ class Window(QMainWindow):
                         if title_name in out_titles:
                             title_name += str(title_repeat)
                             title_repeat += 1
-                        self.output_title_fields[title_name][0].setVisible(title_status[title_count])
+                        # Defensive: Only set visibility if title_name exists and title_count is valid
+                        if title_name in self.output_title_fields and title_count < len(title_status):
+                            self.output_title_fields[title_name][0].setVisible(title_status[title_count])
                         title_count += 1
                         out_titles.append(title_name)
         self.ui_loaded = True
@@ -1595,7 +1597,14 @@ class Window(QMainWindow):
                 k2.setText(val)
             elif typ == TYPE_IMAGE:
                 pixmap1 = QPixmap(val)
-                k2.setPixmap(pixmap1)
+                if k2 is None:
+                    print(f"[ERROR] k2 is None for key {k2_key}, cannot setPixmap.")
+                elif not isinstance(k2, QLabel):
+                    print(f"[ERROR] k2 for key {k2_key} is not a QLabel, type: {type(k2)}")
+                elif not isinstance(pixmap1, QPixmap) or pixmap1.isNull():
+                    print(f"[ERROR] Failed to load image from path: {val}")
+                else:
+                    k2.setPixmap(pixmap1)
             elif typ == TYPE_TEXTBOX:
                 if val:
                     k2.setEnabled(True)
@@ -1640,19 +1649,25 @@ class Window(QMainWindow):
                     titles.append(key)
 
                 key = option[1]
-                if self.output_title_fields[key][1] == 0:
-                    no_field_titles.append(key)
+                # Robust check before accessing output_title_fields[key][1]
+                if (key in self.output_title_fields and 
+                    isinstance(self.output_title_fields[key], (list, tuple)) and 
+                    len(self.output_title_fields[key]) > 1):
+                    if self.output_title_fields[key][1] == 0:
+                        no_field_titles.append(key)
                 if key in no_field_titles:
                     visible_fields = 1
                 else:
                     visible_fields = 0
 
             if option[2] == TYPE_TEXTBOX:
-                if self.dockWidgetContents_out.findChild(QtWidgets.QWidget, option[0]).isVisible():
+                widget = self.dockWidgetContents_out.findChild(QtWidgets.QWidget, option[0])
+                if widget is not None and widget.isVisible():
                     visible_fields += 1
 
             elif option[2] == TYPE_OUT_BUTTON:
-                if self.dockWidgetContents_out.findChild(QtWidgets.QWidget, option[0]).isVisible():
+                widget = self.dockWidgetContents_out.findChild(QtWidgets.QWidget, option[0])
+                if widget is not None and widget.isVisible():
                     visible_fields += 1
 
         self.output_title_visiblity(visible_fields, key, titles, title_repeat)
@@ -1661,27 +1676,47 @@ class Window(QMainWindow):
         for title in self.output_title_fields.keys():
             if title in no_field_titles:
                 no_field_title = title
-            elif self.output_title_fields[title][0].isVisible():
-                if no_field_title in no_field_titles:
-                    no_field_titles.remove(no_field_title)
+            elif (title in self.output_title_fields and 
+                  isinstance(self.output_title_fields[title], (list, tuple)) and 
+                  len(self.output_title_fields[title]) > 0):
+                if self.output_title_fields[title][0].isVisible():
+                    if no_field_title in no_field_titles:
+                        no_field_titles.remove(no_field_title)
 
         for no_field_title in no_field_titles:
-            self.output_title_fields[no_field_title][0].setVisible(False)
+            if (no_field_title in self.output_title_fields and 
+                isinstance(self.output_title_fields[no_field_title], (list, tuple)) and 
+                len(self.output_title_fields[no_field_title]) > 0):
+                self.output_title_fields[no_field_title][0].setVisible(False)
 
     def output_title_visiblity(self, visible_fields, key, titles, title_repeat):
         print(f"key={key} \n titles={titles} ")
         if visible_fields == 0:
             if key in titles:
-                self.output_title_fields[key + str(title_repeat)][0].setVisible(False)
+                title_key = key + str(title_repeat)
+                if (title_key in self.output_title_fields and 
+                    isinstance(self.output_title_fields[title_key], (list, tuple)) and 
+                    len(self.output_title_fields[title_key]) > 0):
+                    self.output_title_fields[title_key][0].setVisible(False)
                 title_repeat += 1
             else:
-                self.output_title_fields[key][0].setVisible(False)
+                if (key in self.output_title_fields and 
+                    isinstance(self.output_title_fields[key], (list, tuple)) and 
+                    len(self.output_title_fields[key]) > 0):
+                    self.output_title_fields[key][0].setVisible(False)
         else:
             if key in titles:
-                self.output_title_fields[key + str(title_repeat)][0].setVisible(True)
+                title_key = key + str(title_repeat)
+                if (title_key in self.output_title_fields and 
+                    isinstance(self.output_title_fields[title_key], (list, tuple)) and 
+                    len(self.output_title_fields[title_key]) > 0):
+                    self.output_title_fields[title_key][0].setVisible(True)
                 title_repeat += 1
             else:
-                self.output_title_fields[key][0].setVisible(True)
+                if (key in self.output_title_fields and 
+                    isinstance(self.output_title_fields[key], (list, tuple)) and 
+                    len(self.output_title_fields[key]) > 0):
+                    self.output_title_fields[key][0].setVisible(True)
 
         return title_repeat
 
@@ -2010,19 +2045,30 @@ class Window(QMainWindow):
                     for n in new:
 
                         if n[0] == key_str and n[0] == KEY_SECSIZE:
-                            if set(uiObj[key_str]) != set(n[1]([self.dockWidgetContents.findChild(QtWidgets.QWidget,
-                                                          KEY_SEC_PROFILE).currentText()])):
+                            val1 = uiObj.get(key_str, [])
+                            if not isinstance(val1, (list, set, tuple)):
+                                val1 = [val1] if val1 is not None else []
+                            val2 = n[1]([self.dockWidgetContents.findChild(QtWidgets.QWidget, KEY_SEC_PROFILE).currentText()])
+                            if not isinstance(val2, (list, set, tuple)):
+                                val2 = [val2] if val2 is not None else []
+                            if set(val1) != set(val2):
                                 key.setCurrentIndex(1)
                             else:
                                 key.setCurrentIndex(0)
-                            data[key_str + "_customized"] = uiObj[key_str]
+                            data[key_str + "_customized"] = val1
 
                         elif n[0] == key_str and n[0] != KEY_SECSIZE:
-                            if set(uiObj[key_str]) != set(n[1]()):
+                            val1 = uiObj.get(key_str, [])
+                            if not isinstance(val1, (list, set, tuple)):
+                                val1 = [val1] if val1 is not None else []
+                            val2 = n[1]()
+                            if not isinstance(val2, (list, set, tuple)):
+                                val2 = [val2] if val2 is not None else []
+                            if set(val1) != set(val2):
                                 key.setCurrentIndex(1)
                             else:
                                 key.setCurrentIndex(1)
-                            data[key_str + "_customized"] = uiObj[key_str]
+                            data[key_str + "_customized"] = val1
 
             else:
                 pass
@@ -2099,11 +2145,33 @@ class Window(QMainWindow):
             for option in out_list:
                 if option[2] == TYPE_TEXTBOX:
                     txt = self.dockWidgetContents_out.findChild(QtWidgets.QWidget, option[0])
-                    txt.setText(str(option[3]))
-                    if status:
-                        txt.setVisible(True if option[3] != "" and txt.isVisible() else False)
-                        txt_label = self.dockWidgetContents_out.findChild(QtWidgets.QWidget, option[0]+"_label")
-                        txt_label.setVisible(True if option[3] != "" and txt_label.isVisible() else False)
+                    # Check if widget exists before trying to set text
+                    if txt is not None:
+                        # Safe string conversion to prevent UI errors
+                        try:
+                            if option[3] is None:
+                                safe_value = ''
+                            elif isinstance(option[3], (int, float)):
+                                # Handle special float values
+                                if isinstance(option[3], float):
+                                    if option[3] != option[3]:  # NaN check
+                                        safe_value = ''
+                                    elif option[3] == float('inf') or option[3] == float('-inf'):
+                                        safe_value = ''
+                                    else:
+                                        safe_value = str(option[3])
+                                else:
+                                    safe_value = str(option[3])
+                            else:
+                                safe_value = str(option[3])
+                        except Exception:
+                            safe_value = ''
+                        txt.setText(safe_value)
+                        if status:
+                            txt.setVisible(True if safe_value != "" and txt.isVisible() else False)
+                            txt_label = self.dockWidgetContents_out.findChild(QtWidgets.QWidget, option[0]+"_label")
+                            if txt_label is not None:
+                                txt_label.setVisible(True if safe_value != "" and txt_label.isVisible() else False)
 
                 elif option[2] == TYPE_OUT_BUTTON:
                     self.dockWidgetContents_out.findChild(QtWidgets.QWidget, option[0]).setEnabled(True)
@@ -2127,9 +2195,16 @@ class Window(QMainWindow):
                     if title_name in out_titles:
                         title_name += str(title_repeat)
                         title_repeat += 1
-                    if self.output_title_fields[title_name][0].isVisible():
-                        out_titles_status.append(1)
+                    # Robust check before accessing output_title_fields[title_name][0]
+                    if (title_name in self.output_title_fields and 
+                        isinstance(self.output_title_fields[title_name], (list, tuple)) and 
+                        len(self.output_title_fields[title_name]) > 0):
+                        if self.output_title_fields[title_name][0].isVisible():
+                            out_titles_status.append(1)
+                        else:
+                            out_titles_status.append(0)
                     else:
+                        # Default to 0 if title not found or invalid structure
                         out_titles_status.append(0)
                     out_titles.append(title_name)
             self.design_inputs.update({"out_titles_status": out_titles_status})

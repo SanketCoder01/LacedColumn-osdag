@@ -424,17 +424,21 @@ class LacedColumn(Member):
             args = args[0]
         profile = args[0] if len(args) > 0 else None
         mode = args[1] if len(args) > 1 else 'All'
+        
         if mode == 'All':
             # Return all designations from DB for the selected profile
             result = self.fn_profile_section(profile)
             if not isinstance(result, list):
                 result = [result] if result else []
-            self.logger.info(f"Section designation (All) for profile '{profile}': {result}")
+            # self.logger.info(f"Section designation (All) for profile '{profile}': {result}")
             return result
         elif mode == 'Customized':
             # Open popup dialog for user to select
             # Fetch all designations for the selected profile from the database
             section_list = self.fn_profile_section(profile)
+            if not section_list:
+                return []
+            
             dialog = SectionDesignationDialog(section_list)
             # Optionally, pre-select current values if available
             current_selected = self.sec_list if hasattr(self, 'sec_list') and self.sec_list else []
@@ -443,14 +447,15 @@ class LacedColumn(Member):
                 for i in range(dialog.list_widget.count()):
                     if dialog.list_widget.item(i).text() in current_selected:
                         dialog.list_widget.item(i).setSelected(True)
+            
             if dialog.exec_() == QDialog.Accepted:
                 selected = dialog.get_selected()
                 if not isinstance(selected, list):
                     selected = [selected] if selected else []
-                self.logger.info(f"Section designation (Customized) selected: {selected}")
+                # self.logger.info(f"Section designation (Customized) selected: {selected}")
                 return selected
             else:
-                self.logger.info("Section designation dialog cancelled; returning previous selection or empty list.")
+                # self.logger.info("Section designation dialog cancelled; returning previous selection or empty list.")
                 return current_selected if current_selected else []
         else:
             return []
@@ -489,7 +494,7 @@ class LacedColumn(Member):
         options_list.append((KEY_MATERIAL, KEY_DISP_MATERIAL, TYPE_COMBOBOX, VALUES_MATERIAL, True, 'No Validator'))
 
         # Section Designation ComboBox with All/Customized
-        options_list.append((KEY_SECSIZE, "Section Size", TYPE_COMBOBOX_CUSTOMIZED, ['All', 'Customized'], True, 'No Validator'))
+        options_list.append((KEY_SECSIZE, "Section Designation", TYPE_COMBOBOX_CUSTOMIZED, ['All', 'Customized'], True, 'No Validator'))
 
         # Geometry
         options_list.append(("title_Geometry", "Geometry", TYPE_TITLE, None, True, 'No Validator'))
@@ -511,7 +516,12 @@ class LacedColumn(Member):
         if len(args) == 1 and isinstance(args[0], list):
             args = args[0]
         profile = args[0] if args else None
-        if profile == 'Beams and Columns':
+        
+        if profile == 'Beams':
+            return connectdb("Beams", call_type="popup")
+        elif profile == 'Columns':
+            return connectdb("Columns", call_type="popup")
+        elif profile == 'Beams and Columns':
             res1 = connectdb("Beams", call_type="popup")
             res2 = connectdb("Columns", call_type="popup")
             return list(set(res1 + res2))
@@ -522,9 +532,12 @@ class LacedColumn(Member):
         elif profile == 'CHS':
             return connectdb("CHS", call_type="popup")
         elif profile in ['Angles', 'Back to Back Angles', 'Star Angles']:
-            return connectdb('Angles', call_type= "popup")
+            return connectdb('Angles', call_type="popup")
         elif profile in ['Channels', 'Back to Back Channels']:
-            return connectdb("Channels", call_type= "popup")
+            return connectdb("Channels", call_type="popup")
+        else:
+            # Default fallback - return empty list
+            return []
 
     def fn_end1_end2(self, *args):
         if len(args) == 1 and isinstance(args[0], list):
@@ -586,7 +599,7 @@ class LacedColumn(Member):
 
     def input_value_changed(self, *args, **kwargs):
         lst = []
-        t1 = ([KEY_SEC_PROFILE], KEY_SECSIZE, TYPE_COMBOBOX_CUSTOMIZED, self.fn_profile_section)
+        t1 = ([KEY_SEC_PROFILE], KEY_SECSIZE, TYPE_COMBOBOX_CUSTOMIZED, self.fn_section_designation)
         lst.append(t1)
         t2 = ([KEY_LYY], KEY_END_COND_YY, TYPE_COMBOBOX_CUSTOMIZED, self.get_end_conditions)
         lst.append(t2)
@@ -624,46 +637,28 @@ class LacedColumn(Member):
         
         out_list = []
         
-        # Section and Material Details
-        out_list.append((None, "Section and Material Details", TYPE_TITLE, None, True))
-        
-        # Section Size - Get from results
-        section_designation = ''
-        if flag and hasattr(self, 'result_designation') and self.result_designation:
-            section_designation = safe_display(self.result_designation)
-        elif hasattr(self, 'optimum_section_ur_results') and self.optimum_section_ur_results:
-            # Get from the best result
-            best_ur = min(self.optimum_section_ur_results.keys()) if self.optimum_section_ur_results else None
-            if best_ur:
-                section_designation = safe_display(self.optimum_section_ur_results[best_ur].get('Designation', ''))
-        out_list.append((KEY_SECSIZE, "Section Size", TYPE_TEXTBOX, section_designation, True))
-        
-        # Material Grade
-        material_grade = ''
-        if flag and self.material:
-            material_grade = safe_display(self.material)
-            self.logger.info(f"Displaying material grade in output: {material_grade}")
-        out_list.append((KEY_MATERIAL, "Material Grade", TYPE_TEXTBOX, material_grade, True))
-        
-        
-
         # Effective Lengths
         out_list.append((None, "Effective Lengths", TYPE_TITLE, None, True))
         eff_len_yy = ''
         eff_len_zz = ''
         if flag:
+            # First try to get from result attributes (set by common_result)
             if hasattr(self, 'result_eff_len_yy') and self.result_eff_len_yy is not None:
                 eff_len_yy = safe_display(self.result_eff_len_yy)
-            elif hasattr(self, 'optimum_section_ur_results') and self.optimum_section_ur_results:
-                best_ur = min(self.optimum_section_ur_results.keys()) if self.optimum_section_ur_results else None
-                if best_ur:
-                    eff_len_yy = safe_display(self.optimum_section_ur_results[best_ur].get('Effective_length_yy', ''))
-            if hasattr(self, 'result_eff_len_zz') and self.result_eff_len_zz is not None:
+            elif hasattr(self, 'result_eff_len_zz') and self.result_eff_len_zz is not None:
                 eff_len_zz = safe_display(self.result_eff_len_zz)
+            # If not available, try to get from optimum_section_ur_results
             elif hasattr(self, 'optimum_section_ur_results') and self.optimum_section_ur_results:
                 best_ur = min(self.optimum_section_ur_results.keys()) if self.optimum_section_ur_results else None
                 if best_ur:
+                    # Try different possible key names
+                    eff_len_yy = safe_display(self.optimum_section_ur_results[best_ur].get('Effective_length_yy', ''))
                     eff_len_zz = safe_display(self.optimum_section_ur_results[best_ur].get('Effective_length_zz', ''))
+            # If still not available, try to get from the last calculated values
+            if not eff_len_yy and hasattr(self, 'effective_length_yy'):
+                eff_len_yy = safe_display(self.effective_length_yy)
+            if not eff_len_zz and hasattr(self, 'effective_length_zz'):
+                eff_len_zz = safe_display(self.effective_length_zz)
         out_list.append((KEY_EFF_LEN_YY, "Effective Length (YY)", TYPE_TEXTBOX, eff_len_yy, True))
         out_list.append((KEY_EFF_LEN_ZZ, "Effective Length (ZZ)", TYPE_TEXTBOX, eff_len_zz, True))
         
@@ -672,18 +667,23 @@ class LacedColumn(Member):
         slender_yy = ''
         slender_zz = ''
         if flag:
+            # First try to get from result attributes (set by common_result)
             if hasattr(self, 'result_eff_sr_yy') and self.result_eff_sr_yy is not None:
                 slender_yy = safe_display(self.result_eff_sr_yy)
-            elif hasattr(self, 'optimum_section_ur_results') and self.optimum_section_ur_results:
-                best_ur = min(self.optimum_section_ur_results.keys()) if self.optimum_section_ur_results else None
-                if best_ur:
-                    slender_yy = safe_display(self.optimum_section_ur_results[best_ur].get('Effective_SR_yy', ''))
-            if hasattr(self, 'result_eff_sr_zz') and self.result_eff_sr_zz is not None:
+            elif hasattr(self, 'result_eff_sr_zz') and self.result_eff_sr_zz is not None:
                 slender_zz = safe_display(self.result_eff_sr_zz)
+            # If not available, try to get from optimum_section_ur_results
             elif hasattr(self, 'optimum_section_ur_results') and self.optimum_section_ur_results:
                 best_ur = min(self.optimum_section_ur_results.keys()) if self.optimum_section_ur_results else None
                 if best_ur:
+                    # Try different possible key names
+                    slender_yy = safe_display(self.optimum_section_ur_results[best_ur].get('Effective_SR_yy', ''))
                     slender_zz = safe_display(self.optimum_section_ur_results[best_ur].get('Effective_SR_zz', ''))
+            # If still not available, try to get from the last calculated values
+            if not slender_yy and hasattr(self, 'effective_sr_yy'):
+                slender_yy = safe_display(self.effective_sr_yy)
+            if not slender_zz and hasattr(self, 'effective_sr_zz'):
+                slender_zz = safe_display(self.effective_sr_zz)
         out_list.append((KEY_SLENDER_YY, "Slenderness Ratio (YY)", TYPE_TEXTBOX, slender_yy, True))
         out_list.append((KEY_SLENDER_ZZ, "Slenderness Ratio (ZZ)", TYPE_TEXTBOX, slender_zz, True))
         
@@ -1018,19 +1018,19 @@ class LacedColumn(Member):
                 return # ['Design Failed, Check Design Report'] @TODO
             elif self.design_status:
                 pass
-            else:
-                input_section_list = getattr(self, 'input_section_list', 'N/A')
-                optimum_section_ur = getattr(self, 'optimum_section_ur', 'N/A')
-                failed_design_dict = getattr(self, 'failed_design_dict', 'N/A')
-                design_status = getattr(self, 'design_status', 'N/A')
-                self.logger.info(f"input_section_list: {input_section_list}")
-                self.logger.info(f"optimum_section_ur: {optimum_section_ur}")
-                self.logger.info(f"failed_design_dict: {failed_design_dict}")
-                self.logger.info(f"design_status: {design_status}")
-                self.logger.error(
-                    "Design Failed. No section satisfied UR or section classification filter."
-                )
-                return # ['Design Failed. Slender Sections Selected']
+            # else:
+            #     input_section_list = getattr(self, 'input_section_list', 'N/A')
+            #     optimum_section_ur = getattr(self, 'optimum_section_ur', 'N/A')
+            #     failed_design_dict = getattr(self, 'failed_design_dict', 'N/A')
+            #     design_status = getattr(self, 'design_status', 'N/A')
+            #     self.logger.info(f"input_section_list: {input_section_list}")
+            #     self.logger.info(f"optimum_section_ur: {optimum_section_ur}")
+            #     self.logger.info(f"failed_design_dict: {failed_design_dict}")
+            #     self.logger.info(f"design_status: {design_status}")
+            #     self.logger.error(
+            #         "Design Failed. No section satisfied UR or section classification filter."
+            #     )
+            #     return # ['Design Failed. Slender Sections Selected']
         else:
             return all_errors
 
@@ -1055,7 +1055,7 @@ class LacedColumn(Member):
 
     # Setting inputs from the input dock GUI
     def set_input_values(self, design_dictionary):
-        self.logger.info(f"set_input_values called with: {design_dictionary}")
+        # self.logger.info(f"set_input_values called with: {design_dictionary}")
         super(Member, self).set_input_values(design_dictionary)
         # section properties
         self.module = design_dictionary.get(KEY_DISP_LACEDCOL, "")
@@ -1168,8 +1168,8 @@ class LacedColumn(Member):
     def section_classification(self):
         # Deduplicate section list to avoid repeated processing
         self.sec_list = list(dict.fromkeys(self.sec_list))
-        self.logger.debug(f"[section_classification] Starting with sec_list: {self.sec_list}")
-        self.logger.info(f"section_classification called. sec_list: {self.sec_list}, sec_profile: {self.sec_profile}, material: {self.material}")
+        # self.logger.debug(f"[section_classification] Starting with sec_list: {self.sec_list}")
+        # self.logger.info(f"section_classification called. sec_list: {self.sec_list}, sec_profile: {self.sec_profile}, material: {self.material}")
         local_flag = True
         self.input_section_list = []
         self.input_section_classification = {}
@@ -1237,10 +1237,10 @@ class LacedColumn(Member):
             if cache_key not in self.material_lookup_cache:
                 self.material_property.connect_to_database_to_get_fy_fu(self.material, max_thk)
                 self.material_lookup_cache[cache_key] = (self.material_property.fy, self.material_property.fu)
-                self.logger.info(f"Updated material properties for {self.material}: fy={self.material_property.fy}, fu={self.material_property.fu}")
+                # self.logger.info(f"Updated material properties for {self.material}: fy={self.material_property.fy}, fu={self.material_property.fu}")
             else:
                 self.material_property.fy, self.material_property.fu = self.material_lookup_cache[cache_key]
-                self.logger.info(f"Using cached material properties for {self.material}: fy={self.material_property.fy}, fu={self.material_property.fu}")
+                # self.logger.info(f"Using cached material properties for {self.material}: fy={self.material_property.fy}, fu={self.material_property.fu}")
 
             # Defensive: Check if material properties were found
             if not self.material_property.fy or not self.material_property.fu:
@@ -1315,11 +1315,11 @@ class LacedColumn(Member):
                     self.section_class = 'Semi-Compact'
 
             # Log section classification details
-            flange_ratio_str = f"{flange_ratio:.2f}" if flange_ratio is not None else "N/A"
-            web_ratio_str = f"{web_ratio:.2f}" if web_ratio is not None else "N/A"
-            self.logger.info(
-                f"The section is {self.section_class}. The {trial_section} section has {flange_ratio_str} flange({self.flange_class}) and {web_ratio_str} web({self.web_class}). [Reference: Cl 3.7, IS 800:2007]"
-            )
+            # flange_ratio_str = f"{flange_ratio:.2f}" if flange_ratio is not None else "N/A"
+            # web_ratio_str = f"{web_ratio:.2f}" if web_ratio is not None else "N/A"
+            # self.logger.info(
+            #     f"The section is {self.section_class}. The {trial_section} section has {flange_ratio_str} flange({self.flange_class}) and {web_ratio_str} web({self.web_class}). [Reference: Cl 3.7, IS 800:2007]"
+            # )
             # 2.2 - Effective length
             self.effective_length_zz = IS800_2007.cl_7_2_2_effective_length_of_prismatic_compression_members(
                 self.length_zz,
@@ -1792,13 +1792,13 @@ class LacedColumn(Member):
         # results based on UR
         if self.optimization_parameter == 'Utilization Ratio':
             # Debug logging
-            self.logger.info(f"Before filtering: optimum_section_ur = {self.optimum_section_ur}")
-            self.logger.info(f"allowable_utilization_ratio = {self.allowable_utilization_ratio}")
+            # self.logger.info(f"Before filtering: optimum_section_ur = {self.optimum_section_ur}")
+            # self.logger.info(f"allowable_utilization_ratio = {self.allowable_utilization_ratio}")
             
             filter_UR = filter(lambda x: x <= min(self.allowable_utilization_ratio, 1.0), self.optimum_section_ur)
             self.optimum_section_ur = list(filter_UR)
             
-            self.logger.info(f"After filtering: optimum_section_ur = {self.optimum_section_ur}")
+            # self.logger.info(f"After filtering: optimum_section_ur = {self.optimum_section_ur}")
 
             self.optimum_section_ur.sort()
 
@@ -1864,16 +1864,16 @@ class LacedColumn(Member):
             else:
                 self.design_status = True
 
-        if self.design_status:
-            self.logger.info(": ========== Design Status ============")
-            self.logger.info(": Overall Column design is SAFE")
-            self.logger.info(": ========== End Of Design ============")
-        else:
-            self.logger.info(": ========== Design Status ============")
-            self.logger.info(": Overall Column design is UNSAFE")
-            if self.failed_reason:
-                self.logger.info(f": Failure Reason: {self.failed_reason}")
-            self.logger.info(": ========== End Of Design ============")
+        # if self.design_status:
+        #     self.logger.info(": ========== Design Status ============")
+        #     self.logger.info(": Overall Column design is SAFE")
+        #     self.logger.info(": ========== End Of Design ============")
+        # else:
+        #     self.logger.info(": ========== Design Status ============")
+        #     self.logger.info(": Overall Column design is UNSAFE")
+        #     if self.failed_reason:
+        #         self.logger.info(f": Failure Reason: {self.failed_reason}")
+        #     self.logger.info(": ========== End Of Design ============")
 
     ### start writing save_design from here!
     """def save_design(self, popup_summary):
@@ -1949,20 +1949,17 @@ class LacedColumn(Member):
                 self.logger.warning(f"The trial section ({self.result_designation}) is Slender. Computing the Effective Sectional Area as per Sec. 9.7.2, Fig. 2 (B & C) of The National Building Code of India (NBC), 2016.")
             if getattr(self, 'effective_area_factor', 1.0) < 1.0:
                 self.effective_area = round(self.effective_area * self.effective_area_factor, 2)
-                self.logger.warning("Reducing the effective sectional area as per the definition in the Design Preferences tab.")
+                # self.logger.warning("Reducing the effective sectional area as per the definition in the Design Preferences tab.")
                 self.logger.info(f"The actual effective area is {round((self.effective_area / self.effective_area_factor), 2)} mm2 and the reduced effective area is {self.effective_area} mm2 [Reference: Cl. 7.3.2, IS 800:2007]")
             else:
-                if self.section_class != 'Slender':
-                    self.logger.info("The effective sectional area is taken as 100% of the cross-sectional area [Reference: Cl. 7.3.2, IS 800:2007].")
-            if self.result_designation in self.input_section_classification:
-                # Safe rounding function
-                def safe_round(value, decimals=2):
-                    if value is None:
-                        return None
-                    try:
-                        return round(float(value), decimals)
-                    except (ValueError, TypeError):
-                        return None
+                if self.result_designation in self.input_section_classification:
+                    def safe_round(value, decimals=2):
+                        if value is None:
+                            return None
+                        try:
+                            return round(float(value), decimals)
+                        except (ValueError, TypeError):
+                            return None
                 
                 classification = self.input_section_classification[self.result_designation]
                 flange_value = safe_round(classification[3] if len(classification) > 3 else None)
@@ -2003,7 +2000,7 @@ class LacedColumn(Member):
             self.result_capacity = list_result[result_type].get('Capacity', None)
             self.result_cost = list_result[result_type].get('Cost', None)
         except Exception as e:
-            self.logger.error(f"Error extracting results: {e}")
+            # self.logger.error(f"Error extracting results: {e}")
             # Set all result attributes to None or a safe default
             self.result_designation = None
             self.section_class = None
@@ -2401,4 +2398,22 @@ def get_fu_fy_I_section(self, *args):
              KEY_SEC_FY: fy}
         return d
 
-
+def debug_results_storage(self):
+        """Debug function to check what values are being stored in the results"""
+        self.logger.info("=== DEBUG: Results Storage ===")
+        if hasattr(self, 'optimum_section_ur_results') and self.optimum_section_ur_results:
+            best_ur = min(self.optimum_section_ur_results.keys()) if self.optimum_section_ur_results else None
+            if best_ur:
+                self.logger.info(f"Best UR: {best_ur}")
+                self.logger.info(f"Available keys in results: {list(self.optimum_section_ur_results[best_ur].keys())}")
+                self.logger.info(f"Effective_length_yy: {self.optimum_section_ur_results[best_ur].get('Effective_length_yy', 'NOT FOUND')}")
+                self.logger.info(f"Effective_SR_yy: {self.optimum_section_ur_results[best_ur].get('Effective_SR_yy', 'NOT FOUND')}")
+        else:
+            self.logger.info("No optimum_section_ur_results available")
+        
+        # Check result attributes
+        self.logger.info(f"result_eff_len_yy: {getattr(self, 'result_eff_len_yy', 'NOT SET')}")
+        self.logger.info(f"result_eff_sr_yy: {getattr(self, 'result_eff_sr_yy', 'NOT SET')}")
+        self.logger.info(f"effective_length_yy: {getattr(self, 'effective_length_yy', 'NOT SET')}")
+        self.logger.info(f"effective_sr_yy: {getattr(self, 'effective_sr_yy', 'NOT SET')}")
+        self.logger.info("=== END DEBUG ===")

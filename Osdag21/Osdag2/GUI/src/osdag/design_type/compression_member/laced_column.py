@@ -29,7 +29,7 @@ from ...utils.common.component import ISection, Material
 from ...utils.common.common_calculation import *
 from ...utils.common.load import Load
 from ..tension_member import *
-from ...utils.common.Section_Properties_Calculator import BBAngle_Properties
+from ...utils.common.Section_Properties_Calculator import BBAngle_Properties, I_sectional_Properties, SHS_RHS_Properties, CHS_Properties
 import math
 import numpy as np
 from ...utils.common import is800_2007
@@ -183,7 +183,9 @@ class LacedColumn(Member):
 # Design Preference Functions Start
 ###############################################
     def tab_list(self):
-        """Returns list of tabs for design preferences"""
+        """
+        Returns list of tabs for design preferences, matching flexure.py exactly.
+        """
         tabs = []
         # Column Section tab (use tab_section for flexure-like behavior)
         t1 = (KEY_DISP_COLSEC, TYPE_TAB_1, self.tab_section)
@@ -205,7 +207,7 @@ class LacedColumn(Member):
 
     def tab_value_changed(self):
         """
-        Returns list of tuples for tab value changes, matching flexure.py for column section.
+        Returns list of tuples for tab value changes, matching flexure.py exactly.
         """
         change_tab = []
         # Section material changes (auto-populate fu, fy)
@@ -232,11 +234,13 @@ class LacedColumn(Member):
         return change_tab
 
     def edit_tabs(self):
+        """This function is required if the tab name changes based on connectivity or profile or any other key.
+        Not required for this module but empty list should be passed"""
         return []
 
     def input_dictionary_design_pref(self):
         """
-        Returns list of tuples for design preferences, matching flexure.py for column section.
+        Returns list of tuples for design preferences, matching flexure.py exactly.
         """
         design_input = []
         # Section material (combobox)
@@ -249,8 +253,7 @@ class LacedColumn(Member):
 
     def input_dictionary_without_design_pref(self, *args, **kwargs):
         """
-        Returns list of tuples for input dictionary without design preferences.
-        Format: [(key, [list of keys], source)]
+        Returns list of tuples for input dictionary without design preferences, matching flexure.py pattern.
         """
         design_input = []
         
@@ -268,25 +271,24 @@ class LacedColumn(Member):
                 KEY_DISP_LACEDCOL_WELD_SIZE
             ], '')
         design_input.append(t2)
-        t2 = (KEY_SECSIZE, [KEY_SECSIZE], 'Input Dock')
-        design_input.append(t2)
-
-        # Column section preferences with safe defaults
-        t3 = (KEY_DISP_COLSEC, [
-            KEY_DISP_LACEDCOL_MATERIAL,
-            KEY_SEC_FU, 
-            KEY_SEC_FY
-        ], 'Input Dock')
-        design_input.append(t3)
 
         return design_input
 
+    def refresh_input_dock(self):
+        """
+        Returns list of tuples for refreshing input dock, matching flexure.py exactly.
+        """
+        add_buttons = []
+        # Add section designation combobox for column section tab
+        t1 = (KEY_DISP_COLSEC, KEY_SECSIZE, TYPE_COMBOBOX, KEY_SECSIZE, None, None, "Columns")
+        add_buttons.append(t1)
+        return add_buttons
+
     def get_values_for_design_pref(self, key, design_dictionary):
         """
-        Returns default values for design preferences when not opened by user.
+        Returns default values for design preferences, matching flexure.py pattern.
         """
-        if not design_dictionary or design_dictionary.get(KEY_SECSIZE, 'Select Section') == 'Select Section' or \
-                design_dictionary.get(KEY_MATERIAL, 'Select Material') == 'Select Material':
+        if not design_dictionary or design_dictionary.get(KEY_MATERIAL, 'Select Material') == 'Select Material':
             fu = ''
             fy = ''
         else:
@@ -295,8 +297,7 @@ class LacedColumn(Member):
             fy = material.fy
 
         val = {
-            KEY_SECSIZE: 'Select Section',  # Main section size key
-            KEY_DISP_LACEDCOL_SEC_SIZE: 'Select Section',  # Keep this for backward compatibility
+            KEY_SECSIZE: 'Select Section',
             KEY_DISP_LACEDCOL_LACING_PROFILE_TYPE: "Angle",
             KEY_DISP_LACEDCOL_LACING_PROFILE: "ISA 40x40x5",
             KEY_DISP_LACEDCOL_EFFECTIVE_AREA: "1.0",
@@ -305,49 +306,11 @@ class LacedColumn(Member):
             KEY_DISP_LACEDCOL_WELD_SIZE: "5mm",
             KEY_SEC_FU: fu,
             KEY_SEC_FY: fy,
-            KEY_SEC_MATERIAL: design_dictionary.get(KEY_MATERIAL, 'Select Material'),
-            # Add defaults for any label keys that might be undefined
-            'Label_1': '',
-            'Label_2': '',
-            'Label_3': '',
-            'Label_4': '',
-            'Label_5': '',
-            'Label_11': '',
-            'Label_12': '',
-            'Label_13': '',
-            'Label_14': '',
-            'Label_15': '',
-            'Label_16': '',
-            'Label_17': '',
-            'Label_18': '',
-            'Label_19': '',
-            'Label_20': '',
-            'Label_21': '',
-            'Label_22': '',
-            'Label_HS_1': '',
-            'Label_HS_2': '',
-            'Label_HS_3': '',
-            'Label_HS_11': '',
-            'Label_HS_12': '',
-            'Label_HS_13': '',
-            'Label_HS_14': '',
-            'Label_HS_15': '',
-            'Label_HS_16': '',
-            'Label_HS_17': '',
-            'Label_HS_18': '',
-            'Label_HS_19': '',
-            'Label_HS_20': '',
-            'Label_HS_21': '',
-            'Label_HS_22': '',
-            'Label_CHS_1': '',
-            'Label_CHS_2': '',
-            'Label_CHS_3': '',
-            'Label_CHS_11': '',
-            'Label_CHS_12': '',
-            'Label_CHS_13': ''
-        }[key]
+            KEY_SEC_MATERIAL: design_dictionary.get(KEY_MATERIAL, 'Select Material')
+        }.get(key, '')
 
         return val
+
     def get_lacing_profiles(self, *args):
         """
         Returns lacing profile options based on selected lacing pattern.
@@ -356,23 +319,14 @@ class LacedColumn(Member):
             return connectdb('Angles', call_type="popup")
 
         pattern = args[0]
-        if pattern == "Single Lacing":
+        if pattern == "Angle":
             return connectdb('Angles', call_type="popup")
-        elif pattern == "Double Lacing":
-            return connectdb('Angles', call_type="popup")
-        elif pattern == "Flat Bar":
+        elif pattern == "Channel":
+            return connectdb('Channels', call_type="popup")
+        elif pattern == "Flat":
             return connectdb('Channels', call_type="popup")
         else:
             return []
-    def refresh_input_dock(self):
-        """
-        Returns list of tuples for refreshing input dock, matching flexure.py for column section.
-        """
-        add_buttons = []
-        # Add section designation combobox for column section tab
-        t1 = (KEY_DISP_COLSEC, KEY_SECSIZE, TYPE_COMBOBOX, KEY_SECSIZE, None, None, "Columns")
-        add_buttons.append(t1)
-        return add_buttons
 
     ####################################
     # Design Preference Functions End
@@ -634,71 +588,41 @@ class LacedColumn(Member):
         return lst
 
     def output_values(self, flag):
-        def safe_display(val):
-            if val is None:
-                return "N/A"
-            return round(val, 2) if isinstance(val, float) else val
-        
-        # Check if we have calculation results - this is more important than design_status
-        has_results = (hasattr(self, 'optimum_section_ur_results') and 
-                      self.optimum_section_ur_results and 
-                      len(self.optimum_section_ur_results) > 0)
-        
-        # Set flag to True if we have results, regardless of design_status
-        if has_results:
-            flag = True
-        elif not hasattr(self, 'design_status'):
-            self.design_status = False
-            flag = flag and self.design_status
-        
+        """
+        Output the actual calculated values for effective length (YY) and slenderness ratio (YY), not classification text.
+        """
         out_list = []
-        
+        def safe_display(val):
+            try:
+                if val is None:
+                    return ''
+                if isinstance(val, float):
+                    return f"{val:.2f}"
+                return str(val)
+            except Exception:
+                return str(val)
+
         # Effective Lengths
-        out_list.append((None, "Effective Lengths", TYPE_TITLE, None, True))
         eff_len_yy = ''
         eff_len_zz = ''
         if flag:
-            # First try to get from result attributes (set by common_result)
-            if hasattr(self, 'result_eff_len_yy') and self.result_eff_len_yy is not None:
-                eff_len_yy = safe_display(self.result_eff_len_yy)
-            elif hasattr(self, 'result_eff_len_zz') and self.result_eff_len_zz is not None:
-                eff_len_zz = safe_display(self.result_eff_len_zz)
-            # If not available, try to get from optimum_section_ur_results
-            elif hasattr(self, 'optimum_section_ur_results') and self.optimum_section_ur_results:
-                best_ur = min(self.optimum_section_ur_results.keys()) if self.optimum_section_ur_results else None
-                if best_ur:
-                    # Try different possible key names
-                    eff_len_yy = safe_display(self.optimum_section_ur_results[best_ur].get('Effective_length_yy', ''))
-                    eff_len_zz = safe_display(self.optimum_section_ur_results[best_ur].get('Effective_length_zz', ''))
-            # If still not available, try to get from the last calculated values
-            if not eff_len_yy and hasattr(self, 'effective_length_yy'):
+            # Always use the actual calculated values
+            if hasattr(self, 'effective_length_yy') and self.effective_length_yy is not None:
                 eff_len_yy = safe_display(self.effective_length_yy)
-            if not eff_len_zz and hasattr(self, 'effective_length_zz'):
+            if hasattr(self, 'effective_length_zz') and self.effective_length_zz is not None:
                 eff_len_zz = safe_display(self.effective_length_zz)
         out_list.append((KEY_EFF_LEN_YY, "Effective Length (YY)", TYPE_TEXTBOX, eff_len_yy, True))
         out_list.append((KEY_EFF_LEN_ZZ, "Effective Length (ZZ)", TYPE_TEXTBOX, eff_len_zz, True))
-        
+
         # Slenderness Ratios
         out_list.append((None, "Slenderness Ratios", TYPE_TITLE, None, True))
         slender_yy = ''
         slender_zz = ''
         if flag:
-            # First try to get from result attributes (set by common_result)
-            if hasattr(self, 'result_eff_sr_yy') and self.result_eff_sr_yy is not None:
-                slender_yy = safe_display(self.result_eff_sr_yy)
-            elif hasattr(self, 'result_eff_sr_zz') and self.result_eff_sr_zz is not None:
-                slender_zz = safe_display(self.result_eff_sr_zz)
-            # If not available, try to get from optimum_section_ur_results
-            elif hasattr(self, 'optimum_section_ur_results') and self.optimum_section_ur_results:
-                best_ur = min(self.optimum_section_ur_results.keys()) if self.optimum_section_ur_results else None
-                if best_ur:
-                    # Try different possible key names
-                    slender_yy = safe_display(self.optimum_section_ur_results[best_ur].get('Effective_SR_yy', ''))
-                    slender_zz = safe_display(self.optimum_section_ur_results[best_ur].get('Effective_SR_zz', ''))
-            # If still not available, try to get from the last calculated values
-            if not slender_yy and hasattr(self, 'effective_sr_yy'):
+            # Always use the actual calculated values
+            if hasattr(self, 'effective_sr_yy') and self.effective_sr_yy is not None:
                 slender_yy = safe_display(self.effective_sr_yy)
-            if not slender_zz and hasattr(self, 'effective_sr_zz'):
+            if hasattr(self, 'effective_sr_zz') and self.effective_sr_zz is not None:
                 slender_zz = safe_display(self.effective_sr_zz)
         out_list.append((KEY_SLENDER_YY, "Slenderness Ratio (YY)", TYPE_TEXTBOX, slender_yy, True))
         out_list.append((KEY_SLENDER_ZZ, "Slenderness Ratio (ZZ)", TYPE_TEXTBOX, slender_zz, True))
@@ -2330,7 +2254,8 @@ class LacedColumn(Member):
         
         try:
             # Connect to database to get section properties
-            section_property = ISection(designation=section, material_grade=self.material if hasattr(self, 'material') else 'Fe250')
+            material_grade = self.material if hasattr(self, 'material') and isinstance(self.material, str) else 'Fe250'
+            section_property = ISection(designation=section, material_grade=material_grade)
             
             # Return section properties in the expected format
             return [
@@ -2366,10 +2291,119 @@ class LacedColumn(Member):
         
         try:
             # Connect to database to get section source
-            section_property = ISection(designation=section, material_grade=self.material if hasattr(self, 'material') else 'Fe250')
+            material_grade = self.material if hasattr(self, 'material') and isinstance(self.material, str) else 'Fe250'
+            section_property = ISection(designation=section, material_grade=material_grade)
             return section_property.source if hasattr(section_property, 'source') else 'IS 808'
         except Exception as e:
             return 'IS 808'  # Default source
+
+    def get_SHS_RHS_properties(self, *args):
+        """
+        Get SHS/RHS section properties for display in design preferences.
+        This function is called when section designation changes in the Column Section tab.
+        """
+        if len(args) == 1 and isinstance(args[0], list):
+            args = args[0]
+        section = args[0] if args else None
+        
+        if not section or section == 'Select Section':
+            return ['', '', '', '', '', '', '', '', '', '', '', '', '']
+        
+        try:
+            # Connect to database to get section properties
+            material_grade = self.material if hasattr(self, 'material') and isinstance(self.material, str) else 'Fe250'
+            section_property = ISection(designation=section, material_grade=material_grade)
+            
+            # Return section properties in the expected format for SHS/RHS
+            return [
+                str(section_property.depth),  # Label_HS_11
+                str(section_property.flange_width),  # Label_HS_12
+                str(section_property.web_thickness),  # Label_HS_13
+                str(section_property.flange_thickness),  # Label_HS_14
+                str(section_property.area),  # Label_HS_15
+                str(section_property.mom_inertia_z),  # Label_HS_16
+                str(section_property.mom_inertia_y),  # Label_HS_17
+                str(section_property.rad_of_gy_z),  # Label_HS_18
+                str(section_property.rad_of_gy_y),  # Label_HS_19
+                str(section_property.elast_sec_mod_z),  # Label_HS_20
+                str(section_property.elast_sec_mod_y),  # Label_HS_21
+                str(section_property.plast_sec_mod_z),  # Label_HS_22
+                str(files("osdag.data.ResourceFiles.images").joinpath("I_section.png"))  # KEY_IMAGE
+            ]
+        except Exception as e:
+            # Return empty values if there's an error
+            return ['', '', '', '', '', '', '', '', '', '', '', '', '']
+
+    def get_CHS_properties(self, *args):
+        """
+        Get CHS section properties for display in design preferences.
+        This function is called when section designation changes in the Column Section tab.
+        """
+        if len(args) == 1 and isinstance(args[0], list):
+            args = args[0]
+        section = args[0] if args else None
+        
+        if not section or section == 'Select Section':
+            return ['', '', '', '', '', '', '', '', '', '']
+        
+        try:
+            # Connect to database to get section properties
+            material_grade = self.material if hasattr(self, 'material') and isinstance(self.material, str) else 'Fe250'
+            section_property = ISection(designation=section, material_grade=material_grade)
+            
+            # Return section properties in the expected format for CHS
+            return [
+                str(section_property.depth),  # Label_CHS_11
+                str(section_property.web_thickness),  # Label_CHS_12
+                str(section_property.area),  # Label_CHS_13
+                str(section_property.mom_inertia_z),  # Label_HS_14
+                str(section_property.mom_inertia_y),  # Label_HS_15
+                str(section_property.rad_of_gy_z),  # Label_HS_16
+                str(section_property.elast_sec_mod_z),  # Label_21
+                str(section_property.plast_sec_mod_z),  # Label_22
+                str(files("osdag.data.ResourceFiles.images").joinpath("I_section.png"))  # KEY_IMAGE
+            ]
+        except Exception as e:
+            # Return empty values if there's an error
+            return ['', '', '', '', '', '', '', '', '', '']
+
+    def get_fu_fy_I_section(self, *args):
+        """
+        Override to accept arguments as passed from tab_change (material, designation_dict).
+        Handles both single and multiple selections robustly.
+        """
+        if len(args) < 2:
+            return {}
+        material_grade = args[0]
+        designation_dict = args[1]
+        # Defensive: handle both dict and string for designation
+        designation = None
+        if isinstance(designation_dict, dict):
+            designation = designation_dict.get(KEY_SECSIZE, "Select Section")
+        elif isinstance(designation_dict, str):
+            designation = designation_dict
+        else:
+            designation = "Select Section"
+        # Handle multiple selections (list)
+        if isinstance(designation, list):
+            designation = designation[0] if designation else "Select Section"
+        if isinstance(material_grade, list):
+            material_grade = material_grade[0] if material_grade else "Select Material"
+        fu = ''
+        fy = ''
+        if material_grade != "Select Material" and designation != "Select Section":
+            table = "Beams" if designation in connectdb("Beams", "popup") else "Columns"
+            I_sec_attributes = ISection(designation)
+            I_sec_attributes.connect_to_database_update_other_attributes(table, designation, material_grade)
+            fu = str(I_sec_attributes.fu)
+            fy = str(I_sec_attributes.fy)
+        d = {KEY_SUPTNGSEC_FU: fu,
+             KEY_SUPTNGSEC_FY: fy,
+             KEY_SUPTDSEC_FU: fu,
+             KEY_SUPTDSEC_FY: fy,
+             KEY_SEC_FU: fu,
+             KEY_SEC_FY: fy}
+        return d
 
 class SectionDesignationDialog(QDialog):
     def __init__(self, section_list, parent=None):
@@ -2430,44 +2464,6 @@ def safe_float(val):
         return float(val)
     except Exception:
         return 0.0
-
-def get_fu_fy_I_section(self, *args):
-        """
-        Override to accept arguments as passed from tab_change (material, designation_dict).
-        Handles both single and multiple selections robustly.
-        """
-        if len(args) < 2:
-            return {}
-        material_grade = args[0]
-        designation_dict = args[1]
-        # Defensive: handle both dict and string for designation
-        designation = None
-        if isinstance(designation_dict, dict):
-            designation = designation_dict.get(KEY_SECSIZE, "Select Section")
-        elif isinstance(designation_dict, str):
-            designation = designation_dict
-        else:
-            designation = "Select Section"
-        # Handle multiple selections (list)
-        if isinstance(designation, list):
-            designation = designation[0] if designation else "Select Section"
-        if isinstance(material_grade, list):
-            material_grade = material_grade[0] if material_grade else "Select Material"
-        fu = ''
-        fy = ''
-        if material_grade != "Select Material" and designation != "Select Section":
-            table = "Beams" if designation in connectdb("Beams", "popup") else "Columns"
-            I_sec_attributes = ISection(designation)
-            I_sec_attributes.connect_to_database_update_other_attributes(table, designation, material_grade)
-            fu = str(I_sec_attributes.fu)
-            fy = str(I_sec_attributes.fy)
-        d = {KEY_SUPTNGSEC_FU: fu,
-             KEY_SUPTNGSEC_FY: fy,
-             KEY_SUPTDSEC_FU: fu,
-             KEY_SUPTDSEC_FY: fy,
-             KEY_SEC_FU: fu,
-             KEY_SEC_FY: fy}
-        return d
 
 def debug_results_storage(self):
         """Debug function to check what values are being stored in the results"""

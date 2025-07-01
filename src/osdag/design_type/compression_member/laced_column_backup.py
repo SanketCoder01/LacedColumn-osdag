@@ -2386,3 +2386,34 @@ def test_dialog(self):
             return None
 
 
+# // ... existing code ...
+#             if output_type == TYPE_TEXTBOX:
+#                 r = QtWidgets.QLineEdit(self.dockWidgetContents_out)
+#                 r.setObjectName(option[0])
+#                 r.setReadOnly(True)
+#                 out_layout2.addWidget(r, j, 2, 1, 1)
+#                 r.setVisible(True if option[4] else False)
+#                 fields += 1
+#                 if current_key is not None and current_key in self.output_title_fields:
+#                     if isinstance(self.output_title_fields[current_key], (list, tuple)) and len(self.output_title_fields[current_key]) > 1:
+#                         self.output_title_fields[current_key][1] = fields
+#                 maxi_width_right = max(maxi_width_right, 100)    # predefined minimum width of 110 for textboxes
+# // ... existing code ...
+#             if output_type == TYPE_OUT_BUTTON:
+#                 v = option[3]
+#                 b = QtWidgets.QPushButton(self.dockWidgetContents_out)
+#                 b.setObjectName(option[0])
+#                 #b.setFixedSize(b.size())
+#                 b.resize(b.sizeHint().width(), b.sizeHint().height()+100)
+#                 b.setText(v[0])
+#                 b.setDisabled(True)
+#                 b.setVisible(True if option[4] else False)
+#                 fields += 1
+#                 if current_key is not None and current_key in self.output_title_fields:
+#                     if isinstance(self.output_title_fields[current_key], (list, tuple)) and len(self.output_title_fields[current_key]) > 1:
+#                         self.output_title_fields[current_key][1] = fields
+#                 #b.setFixedSize(b.size())
+#                 button_list.append(option)
+#                 out_layout2.addWidget(b, j, 2, 1, 1)
+#                 maxi_width_right = max(maxi_width_right, b.sizeHint().width())
+# // ... existing code ...

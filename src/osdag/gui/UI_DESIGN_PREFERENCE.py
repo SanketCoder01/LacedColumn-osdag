@@ -2,7 +2,8 @@ from PyQt5 import QtCore, QtGui, QtWidgets
 from PyQt5.QtWidgets import QDialog, QVBoxLayout, QHBoxLayout, QGridLayout, QLabel, QPushButton, QComboBox, QCheckBox, QGroupBox, QRadioButton, QButtonGroup, QWidget, QScrollArea, QFrame, QSizePolicy, QSpacerItem, QLineEdit, QMessageBox
 from PyQt5.QtCore import Qt, QSize
 from PyQt5.QtWidgets import QTabWidget
-from PyQt5.QtGui import QFont, QIcon, QPixmap
+from PyQt5.QtGui import QFont, QIcon, QPixmap, QDoubleValidator
+from PyQt5.QtWidgets import QTextBrowser
 
 from ..Common import *
 from ..utils.common.Section_Properties_Calculator import *
@@ -528,7 +529,7 @@ class Ui_Form(QDialog):
 
                 # Skip module check for tabs 4 and 5
                 if tab_type not in [TYPE_TAB_4, TYPE_TAB_5]:
-                    if module in [KEY_DISP_FINPLATE, KEY_DISP_ENDPLATE, KEY_DISP_CLEATANGLE, KEY_DISP_SEATED_ANGLE, KEY_DISP_BCENDPLATE]:
+                    if self.module in [KEY_DISP_FINPLATE, KEY_DISP_ENDPLATE, KEY_DISP_CLEATANGLE, KEY_DISP_SEATED_ANGLE, KEY_DISP_BCENDPLATE]:
                         pushButton_Clear_Column = self.tabWidget.tabs.findChild(QtWidgets.QWidget, "pushButton_Clear_" + KEY_DISP_COLSEC)
                         pushButton_Clear_Column.clicked.connect(lambda: self.clear_tab(KEY_DISP_COLSEC))
                         pushButton_Add_Column = self.tabWidget.tabs.findChild(QtWidgets.QWidget, "pushButton_Add_" + KEY_DISP_COLSEC)
@@ -546,7 +547,7 @@ class Ui_Form(QDialog):
                         pushButton_Download_Beam = self.tabWidget.tabs.findChild(QWidget, "pushButton_Download_" + KEY_DISP_BEAMSEC)
                         pushButton_Download_Beam.clicked.connect(lambda: self.download_Database(table="Beams", call_type="header"))
 
-                    if module == KEY_DISP_COLUMNCOVERPLATE or module == KEY_DISP_COLUMNCOVERPLATEWELD or module == KEY_DISP_COLUMNENDPLATE:
+                    if self.module == KEY_DISP_COLUMNCOVERPLATE or self.module == KEY_DISP_COLUMNCOVERPLATEWELD or self.module == KEY_DISP_COLUMNENDPLATE:
                         pushButton_Clear_Column = self.tabWidget.tabs.findChild(QtWidgets.QWidget, "pushButton_Clear_" + KEY_DISP_COLSEC)
                         pushButton_Clear_Column.clicked.connect(lambda: self.clear_tab(KEY_DISP_COLSEC))
                         pushButton_Add_Column = self.tabWidget.tabs.findChild(QtWidgets.QWidget, "pushButton_Add_" + KEY_DISP_COLSEC)
@@ -556,7 +557,7 @@ class Ui_Form(QDialog):
                         pushButton_Download_Column = self.tabWidget.tabs.findChild(QWidget, "pushButton_Download_" + KEY_DISP_COLSEC)
                         pushButton_Download_Column.clicked.connect(lambda: self.download_Database(table="Columns", call_type="header"))
 
-                    if module == KEY_DISP_BEAMCOVERPLATE or module == KEY_DISP_BEAMCOVERPLATEWELD:
+                    if self.module == KEY_DISP_BEAMCOVERPLATE or self.module == KEY_DISP_BEAMCOVERPLATEWELD:
                         pushButton_Clear_Beam = self.tabWidget.tabs.findChild(QtWidgets.QWidget, "pushButton_Clear_" + KEY_DISP_BEAMSEC)
                         pushButton_Clear_Beam.clicked.connect(lambda: self.clear_tab(KEY_DISP_BEAMSEC))
                         pushButton_Add_Beam = self.tabWidget.tabs.findChild(QtWidgets.QWidget, "pushButton_Add_" + KEY_DISP_BEAMSEC)
@@ -566,7 +567,7 @@ class Ui_Form(QDialog):
                         pushButton_Download_Beam = self.tabWidget.tabs.findChild(QWidget, "pushButton_Download_" + KEY_DISP_BEAMSEC)
                         pushButton_Download_Beam.clicked.connect(lambda: self.download_Database(table="Beams", call_type="header"))
 
-                    if module == KEY_DISP_BB_EP_SPLICE:
+                    if self.module == KEY_DISP_BB_EP_SPLICE:
                         pushButton_Clear_Beam = self.tabWidget.tabs.findChild(QtWidgets.QWidget, "pushButton_Clear_" + KEY_DISP_BEAMSEC)
                         pushButton_Clear_Beam.clicked.connect(lambda: self.clear_tab(KEY_DISP_BEAMSEC))
                         pushButton_Add_Beam = self.tabWidget.tabs.findChild(QtWidgets.QWidget, "pushButton_Add_" + KEY_DISP_BEAMSEC)
@@ -576,7 +577,7 @@ class Ui_Form(QDialog):
                         pushButton_Download_Beam = self.tabWidget.tabs.findChild(QWidget, "pushButton_Download_" + KEY_DISP_BEAMSEC)
                         pushButton_Download_Beam.clicked.connect(lambda: self.download_Database(table="Beams", call_type="header"))
 
-                    if module == KEY_DISP_COMPRESSION:
+                    if self.module == KEY_DISP_COMPRESSION:
                         pushButton_Clear_Column = self.tabWidget.tabs.findChild(QtWidgets.QWidget, "pushButton_Clear_" + KEY_DISP_COLSEC)
                         pushButton_Clear_Column.clicked.connect(lambda: self.clear_tab(KEY_DISP_COLSEC))
                         pushButton_Add_Column = self.tabWidget.tabs.findChild(QtWidgets.QWidget, "pushButton_Add_" + KEY_DISP_COLSEC)
@@ -594,7 +595,7 @@ class Ui_Form(QDialog):
                         pushButton_Download_Channel = self.tabWidget.tabs.findChild(QtWidgets.QWidget, "pushButton_Download_" + DISP_TITLE_CHANNEL)
                         pushButton_Download_Channel.clicked.connect(lambda: self.download_Database(table="Channels", call_type="header"))
 
-                    if module == KEY_DISP_COMPRESSION_STRUT:
+                    if self.module == KEY_DISP_COMPRESSION_STRUT:
                         pushButton_Clear_Angle = self.tabWidget.tabs.findChild(QtWidgets.QWidget, "pushButton_Clear_" + DISP_TITLE_ANGLE)
                         pushButton_Clear_Angle.clicked.connect(lambda: self.clear_tab(DISP_TITLE_ANGLE))
                         pushButton_Add_Angle = self.tabWidget.tabs.findChild(QtWidgets.QWidget, "pushButton_Add_" + DISP_TITLE_ANGLE)
@@ -604,7 +605,7 @@ class Ui_Form(QDialog):
                         pushButton_Download_Angle = self.tabWidget.tabs.findChild(QWidget, "pushButton_Download_" + DISP_TITLE_ANGLE)
                         pushButton_Download_Angle.clicked.connect(lambda: self.download_Database(table="Angles", call_type="header"))
 
-                    if module == KEY_DISP_BASE_PLATE:
+                    if self.module == KEY_DISP_BASE_PLATE:
                         pushButton_Clear_Column = self.tabWidget.tabs.findChild(QtWidgets.QWidget, "pushButton_Clear_" + KEY_DISP_COLSEC)
                         pushButton_Clear_Column.clicked.connect(lambda: self.clear_tab(KEY_DISP_COLSEC))
                         pushButton_Add_Column = self.tabWidget.tabs.findChild(QtWidgets.QWidget, "pushButton_Add_" + KEY_DISP_COLSEC)
@@ -614,7 +615,7 @@ class Ui_Form(QDialog):
                         pushButton_Download_Column = self.tabWidget.tabs.findChild(QWidget, "pushButton_Download_" + KEY_DISP_COLSEC)
                         pushButton_Download_Column.clicked.connect(lambda: self.download_Database(table="Columns", call_type="header"))
 
-                    if module == KEY_DISP_TENSION_BOLTED or module == KEY_DISP_TENSION_WELDED:
+                    if self.module == KEY_DISP_TENSION_BOLTED or self.module == KEY_DISP_TENSION_WELDED:
                         pushButton_Clear_Angle = self.tabWidget.tabs.findChild(QtWidgets.QWidget, "pushButton_Clear_" + DISP_TITLE_ANGLE)
                         pushButton_Clear_Angle.clicked.connect(lambda: self.clear_tab(DISP_TITLE_ANGLE))
                         pushButton_Add_Angle = self.tabWidget.tabs.findChild(QtWidgets.QWidget, "pushButton_Add_" + DISP_TITLE_ANGLE)
@@ -719,7 +720,7 @@ class Ui_Form(QDialog):
             if data == 0:
                 if table == "RHS":
                     c.execute('''INSERT INTO RHS (Designation,D,B,T,W,A,Izz,Iyy,Rzz,Ryy,
-                        Zzz,Zyy,Zpz,Zpy,Source) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)''',
+                        Zzz,Zyy,Zpz,Zpy,Source) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)''',
                               (values[KEY_SECSIZE], values["Label_HS_1"], values["Label_HS_2"],
                                values["Label_HS_3"], values["Label_HS_11"], values["Label_HS_12"],
                                values["Label_HS_13"], values["Label_HS_14"], values["Label_HS_15"],
@@ -729,7 +730,7 @@ class Ui_Form(QDialog):
                     conn.commit()
                 elif table == "SHS":
                     c.execute('''INSERT INTO SHS (Designation,D,B,T,W,A,Izz,Iyy,Rzz,Ryy,
-                        Zzz,Zyy,Zpz,Zpy,Source) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)''',
+                        Zzz,Zyy,Zpz,Zpy,Source) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)''',
                               (values[KEY_SECSIZE], values["Label_HS_1"], values["Label_HS_2"],
                                values["Label_HS_3"], values["Label_HS_11"], values["Label_HS_12"],
                                values["Label_HS_13"], values["Label_HS_14"], values["Label_HS_15"],
@@ -1494,6 +1495,8 @@ class DesignPreferences():
         self.main = main
         self.window_close_flag = True
         self.changes = None
+        # Connect dynamic update signals for design preferences
+        # module_window.combined_design_prefer(input_dictionary, main)
 
     def show(self):
         resolution = QtWidgets.QDesktopWidget().screenGeometry()

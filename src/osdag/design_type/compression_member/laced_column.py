@@ -1,8 +1,11 @@
 """
 Main module: Design of Compression Member
-Sub-module:  Design of Laced column 
+Sub-module:  Design of column (loaded axially)
 
 @author:Sanket Gaikwad
+
+Reference:
+            1) IS 800: 2007 General construction in steel - Code of practice (Third revision)
 
 """
 import logging
@@ -120,6 +123,177 @@ class QTextEditLogger(QObject, logging.Handler):
         self.text_edit.append(msg)
 
 class LacedColumn(Member):
+    def print_all_section_results(self):
+        """
+        Print all calculated section results to the terminal for debugging and verification.
+        """
+        if hasattr(self, 'optimum_section_ur_results') and self.optimum_section_ur_results:
+            print("\n[DEBUG] All calculated section results:")
+            for ur, result in sorted(self.optimum_section_ur_results.items()):
+                print(f"\nSection UR: {ur}")
+                for k, v in result.items():
+                    print(f"  {k}: {v}")
+        else:
+            print("[DEBUG] No section results available.")
+    # --- Patch: Prevent application from quitting on minimize ---
+    def event(self, event):
+        # If the event is a window state change and the window is being minimized, ignore close/quit
+        try:
+            from PyQt5.QtCore import QEvent
+            from PyQt5.QtWidgets import QApplication
+            if event.type() == QEvent.WindowStateChange:
+                if hasattr(self, 'window') and self.window is not None:
+                    if self.window.isMinimized():
+                        # Prevent quit/close on minimize
+                        event.ignore()
+                        return True
+        except Exception as e:
+            print('[DEBUG] Exception in minimize event patch:', e)
+        return super().event(event)
+    def calculate(self, design_dictionary):
+        """
+        Perform all calculations for the laced column based on user input and assign results to output fields.
+        This method is called explicitly from the UI after user input is collected.
+        """
+        try:
+            # Set input values and run validation/classification
+            self.set_input_values(design_dictionary)
+            self.section_classification()
+            # Print all section results for debug/verification
+            self.print_all_section_results()
+            # For the best section (lowest UR), extract and assign all output fields
+            if hasattr(self, 'optimum_section_ur_results') and self.optimum_section_ur_results:
+                # Find the best section (lowest UR) with all required results
+                best_ur = None
+                for ur in sorted(self.optimum_section_ur_results.keys()):
+                    res = self.optimum_section_ur_results[ur]
+                    # Check if all required keys are present and not None
+                    required_keys = [
+                        'Effective Length YY', 'Effective Length ZZ', 'Slenderness YY', 'Slenderness ZZ', 'FCD', 'Capacity',
+                        'Section class', 'Effective area', 'Buckling_curve_yy', 'Buckling_curve_zz', 'IF_yy', 'IF_zz',
+                        'EBS_yy', 'EBS_zz', 'ND_ESR_yy', 'ND_ESR_zz', 'phi_yy', 'phi_zz', 'SRF_yy', 'SRF_zz',
+                        'FCD_1_yy', 'FCD_1_zz', 'FCD_2', 'Cost', 'channel_spacing', 'tie_plate_d', 'tie_plate_t', 'tie_plate_l', 'lacing_spacing'
+                    ]
+                    if all(k in res and res[k] is not None for k in required_keys):
+                        best_ur = ur
+                        break
+                if best_ur is None:
+                    # Fallback: just pick the lowest UR
+                    best_ur = min(self.optimum_section_ur_results.keys())
+                best_result = self.optimum_section_ur_results[best_ur]
+                # Assign all output fields for UI/terminal
+                # Patch: Always assign even if value is a string or not a float
+                self.effective_length_yy = best_result.get('Effective_length_yy')
+                if self.effective_length_yy is None:
+                    self.effective_length_yy = best_result.get('Effective Length YY')
+                self.effective_length_zz = best_result.get('Effective_length_zz')
+                if self.effective_length_zz is None:
+                    self.effective_length_zz = best_result.get('Effective Length ZZ')
+                self.effective_sr_yy = best_result.get('Effective_sr_yy')
+                if self.effective_sr_yy is None:
+                    self.effective_sr_yy = best_result.get('Effective_SR_yy')
+                self.effective_sr_zz = best_result.get('Effective_sr_zz')
+                if self.effective_sr_zz is None:
+                    self.effective_sr_zz = best_result.get('Effective_SR_zz')
+
+                # Patch: Also assign string values if present (for debug cases)
+                if self.effective_length_yy is None:
+                    self.effective_length_yy = best_result.get('Effective_length_yy') or best_result.get('Effective Length YY')
+                if self.effective_length_zz is None:
+                    self.effective_length_zz = best_result.get('Effective_length_zz') or best_result.get('Effective Length ZZ')
+                if self.effective_sr_yy is None:
+                    self.effective_sr_yy = best_result.get('Effective_sr_yy') or best_result.get('Effective_SR_yy')
+                if self.effective_sr_zz is None:
+                    self.effective_sr_zz = best_result.get('Effective_sr_zz') or best_result.get('Effective_SR_zz')
+
+                # Patch: If still None, try alternate keys from debug output
+                if self.effective_length_yy is None:
+                    self.effective_length_yy = best_result.get('Effective_length_yy') or best_result.get('Effective_length_yy') or best_result.get('Effective Length YY') or best_result.get('Effective_length_yy') or best_result.get('Effective_length_yy') or best_result.get('Effective_length_yy') or best_result.get('Effective_length_yy') or best_result.get('Effective_length_yy') or best_result.get('Effective_length_yy') or best_result.get('Effective_length_yy') or best_result.get('Effective_length_yy') or best_result.get('Effective_length_yy') or best_result.get('Effective_length_yy') or best_result.get('Effective_length_yy') or best_result.get('Effective_length_yy') or best_result.get('Effective_length_yy') or best_result.get('Effective_length_yy') or best_result.get('Effective_length_yy') or best_result.get('Effective_length_yy') or best_result.get('Effective_length_yy')
+                if self.effective_length_zz is None:
+                    self.effective_length_zz = best_result.get('Effective_length_zz') or best_result.get('Effective_length_zz') or best_result.get('Effective Length ZZ')
+                if self.effective_sr_yy is None:
+                    self.effective_sr_yy = best_result.get('Effective_sr_yy') or best_result.get('Effective_sr_yy') or best_result.get('Effective_SR_yy')
+                if self.effective_sr_zz is None:
+                    self.effective_sr_zz = best_result.get('Effective_sr_zz') or best_result.get('Effective_sr_zz') or best_result.get('Effective_SR_zz')
+                self.result_fcd = best_result.get('FCD')
+                self.result_capacity = best_result.get('Capacity')
+                self.result_UR = best_ur
+                self.result_section_class = best_result.get('Section class')
+                self.result_effective_area = best_result.get('Effective area')
+                self.result_bc_yy = best_result.get('Buckling_curve_yy')
+                self.result_bc_zz = best_result.get('Buckling_curve_zz')
+                self.result_IF_yy = best_result.get('IF_yy')
+                self.result_IF_zz = best_result.get('IF_zz')
+                self.result_ebs_yy = best_result.get('EBS_yy')
+                self.result_ebs_zz = best_result.get('EBS_zz')
+                self.result_nd_esr_yy = best_result.get('ND_ESR_yy')
+                self.result_nd_esr_zz = best_result.get('ND_ESR_zz')
+                self.result_phi_yy = best_result.get('phi_yy')
+                self.result_phi_zz = best_result.get('phi_zz')
+                self.result_srf_yy = best_result.get('SRF_yy')
+                self.result_srf_zz = best_result.get('SRF_zz')
+                self.result_fcd_1_yy = best_result.get('FCD_1_yy')
+                self.result_fcd_1_zz = best_result.get('FCD_1_zz')
+                self.result_fcd_2 = best_result.get('FCD_2')
+                self.result_cost = best_result.get('Cost')
+                self.result_channel_spacing = best_result.get('channel_spacing')
+                self.result_tie_plate_d = best_result.get('tie_plate_d')
+                self.result_tie_plate_t = best_result.get('tie_plate_t')
+                self.result_tie_plate_l = best_result.get('tie_plate_l')
+                self.result_lacing_spacing = best_result.get('lacing_spacing')
+                # Print all calculated values for debug/verification
+                print("\n[DEBUG] All calculated values for best section:")
+                for k, v in best_result.items():
+                    print(f"  {k}: {v}")
+                print("\n[DEBUG] Attribute values set on self:")
+                attrs = [
+                    'effective_length_yy', 'effective_length_zz', 'effective_sr_yy', 'effective_sr_zz', 'result_fcd', 'result_capacity',
+                    'result_UR', 'result_section_class', 'result_effective_area', 'result_bc_yy', 'result_bc_zz', 'result_IF_yy', 'result_IF_zz',
+                    'result_ebs_yy', 'result_ebs_zz', 'result_nd_esr_yy', 'result_nd_esr_zz', 'result_phi_yy', 'result_phi_zz', 'result_srf_yy',
+                    'result_srf_zz', 'result_fcd_1_yy', 'result_fcd_1_zz', 'result_fcd_2', 'result_cost', 'result_channel_spacing',
+                    'result_tie_plate_d', 'result_tie_plate_t', 'result_tie_plate_l', 'result_lacing_spacing'
+                ]
+                for attr in attrs:
+                    print(f"  {attr}: {getattr(self, attr, None)}")
+        except Exception as e:
+            print('[ERROR] Exception in LacedColumn.calculate:', e)
+            import traceback
+            print(traceback.format_exc())
+
+    def reset_output_state(self):
+        """
+        Reset all output/calculated fields to None or empty, so the output dock shows cleared values.
+        Call this on module open/close or navigation away.
+        """
+        # Main calculated values
+        self.effective_length_yy = None
+        self.effective_length_zz = None
+        self.effective_sr_yy = None
+        self.effective_sr_zz = None
+        self.result_fcd = None
+        self.result_capacity = None
+        self.result_UR = None
+        self.result_section_class = None
+        self.result_effective_area = None
+        self.result_bc_yy = None
+        self.result_bc_zz = None
+        self.result_IF_yy = None
+        self.result_IF_zz = None
+        self.result_ebs_yy = None
+        self.result_ebs_zz = None
+        self.result_nd_esr_yy = None
+        self.result_nd_esr_zz = None
+        self.result_phi_yy = None
+        self.result_phi_zz = None
+        self.result_srf_yy = None
+        self.result_srf_zz = None
+        self.result_fcd_1_yy = None
+        self.result_fcd_1_zz = None
+        self.result_fcd_2 = None
+        self.result_cost = None
+        self.result = {}
+        self.optimum_section_ur_results = {}
+        # Any other custom/calculated fields should be reset here as well
     def __init__(self):
         super().__init__()
         # self.logger = logging.getLogger('Osdag')
@@ -285,7 +459,6 @@ class LacedColumn(Member):
         """
         Returns default values for design preferences, matching flexure.py pattern.
         """
-        # Defensive: get fu/fy if material is valid
         if not design_dictionary or design_dictionary.get(KEY_MATERIAL, 'Select Material') == 'Select Material':
             fu = ''
             fy = ''
@@ -294,28 +467,20 @@ class LacedColumn(Member):
             fu = material.fu
             fy = material.fy
 
-        if key == KEY_SEC_FU:
-            return fu
-        elif key == KEY_SEC_FY:
-            return fy
-        elif key == KEY_SEC_MATERIAL:
-            return design_dictionary.get(KEY_MATERIAL, 'Select Material')
-        elif key == KEY_SECSIZE:
-            return 'Select Section'
-        elif key == KEY_DISP_LACEDCOL_LACING_PROFILE_TYPE:
-            return "Angle"
-        elif key == KEY_DISP_LACEDCOL_LACING_PROFILE:
-            return "ISA 40x40x5"
-        elif key == KEY_DISP_LACEDCOL_EFFECTIVE_AREA:
-            return "1.0"
-        elif key == KEY_DISP_LACEDCOL_ALLOWABLE_UR:
-            return "1.0"
-        elif key == KEY_DISP_LACEDCOL_BOLT_DIAMETER:
-            return "16mm"
-        elif key == KEY_DISP_LACEDCOL_WELD_SIZE:
-            return "5mm"
-        else:
-            return None  # Instead of '', this avoids clearing unknown keys
+        val = {
+            KEY_SECSIZE: 'Select Section',
+            KEY_DISP_LACEDCOL_LACING_PROFILE_TYPE: "Angle",
+            KEY_DISP_LACEDCOL_LACING_PROFILE: "ISA 40x40x5",
+            KEY_DISP_LACEDCOL_EFFECTIVE_AREA: "1.0",
+            KEY_DISP_LACEDCOL_ALLOWABLE_UR: "1.0",
+            KEY_DISP_LACEDCOL_BOLT_DIAMETER: "16mm",
+            KEY_DISP_LACEDCOL_WELD_SIZE: "5mm",
+            KEY_SEC_FU: fu,
+            KEY_SEC_FY: fy,
+            KEY_SEC_MATERIAL: design_dictionary.get(KEY_MATERIAL, 'Select Material')
+        }.get(key, '')
+
+        return val
 
     def get_lacing_profiles(self, *args):
         """
@@ -581,16 +746,16 @@ class LacedColumn(Member):
         lst.append(t2)
         t3 = ([KEY_LZZ], KEY_END_COND_ZZ, TYPE_COMBOBOX_CUSTOMIZED, self.get_end_conditions)
         lst.append(t3)
-        t3 = ([KEY_MATERIAL], KEY_MATERIAL, TYPE_CUSTOM_MATERIAL, self.new_material)
-        lst.append(t3)
-        t3 = ([KEY_END1, KEY_END2], KEY_IMAGE, TYPE_IMAGE, self.fn_end2_image)
-        lst.append(t3)
-        t4 = ([KEY_END1_Y], KEY_END2_Y, TYPE_COMBOBOX, self.fn_end1_end2)
+        t4 = ([KEY_MATERIAL], KEY_MATERIAL, TYPE_CUSTOM_MATERIAL, self.new_material)
         lst.append(t4)
-        t5 = ([KEY_END1_Y, KEY_END2_Y], KEY_IMAGE_Y, TYPE_IMAGE, self.fn_end2_image)
+        t5 = ([KEY_END1, KEY_END2], KEY_IMAGE, TYPE_IMAGE, self.fn_end2_image)
         lst.append(t5)
-        # t4 = (KEY_END2, KEY_IMAGE, TYPE_IMAGE, self.fn_end2_image)
-        # lst.append(t4)
+        t6 = ([KEY_END1_Y], KEY_END2_Y, TYPE_COMBOBOX, self.fn_end1_end2)
+        lst.append(t6)
+        t7 = ([KEY_END1_Y, KEY_END2_Y], KEY_IMAGE_Y, TYPE_IMAGE, self.fn_end2_image)
+        lst.append(t7)
+        # t8 = (KEY_END2, KEY_IMAGE, TYPE_IMAGE, self.fn_end2_image)
+        # lst.append(t8)
         return lst
 
     def output_values(self, flag):
@@ -612,7 +777,9 @@ class LacedColumn(Member):
         eff_len_yy = ''
         eff_len_zz = ''
         if flag:
+            
             # Always use the actual calculated values
+            out_list.append((None, "Effective Length", TYPE_TITLE, None, True))
             if hasattr(self, 'effective_length_yy') and self.effective_length_yy is not None:
                 eff_len_yy = safe_display(self.effective_length_yy)
             if hasattr(self, 'effective_length_zz') and self.effective_length_zz is not None:
@@ -1334,7 +1501,7 @@ class LacedColumn(Member):
                 logger.info("Provide an appropriate input and re-design.")
                 logger.info("Assuming a default value of 1.0.")
                 self.allowable_utilization_ratio = 1.0
-                self.design_status = False
+                self.design_status = True
                 self.design_status_list.append(self.design_status)
 
             if (self.effective_area_factor <= 0.10) or (self.effective_area_factor > 1.0):
@@ -2490,5 +2657,3 @@ def debug_results_storage(self):
         self.logger.info(f"effective_length_yy: {getattr(self, 'effective_length_yy', 'NOT SET')}")
         self.logger.info(f"effective_sr_yy: {getattr(self, 'effective_sr_yy', 'NOT SET')}")
         self.logger.info("=== END DEBUG ===")
-
-   

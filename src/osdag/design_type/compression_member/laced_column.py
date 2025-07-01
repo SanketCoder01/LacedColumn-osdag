@@ -1385,16 +1385,6 @@ class LacedColumn(Member):
                 if best_ur:
                     lacing_spacing = safe_display(self.optimum_section_ur_results[best_ur].get('lacing_spacing', ''))
         out_list.append(("lacing_spacing", "Lacing Spacing (L0) (mm)", TYPE_TEXTBOX, lacing_spacing, True))
-        
-        # --- FORCE: Always show self.effective_length_yy ---
-        eff_len_yy = ''
-        if hasattr(self, 'effective_length_yy') and self.effective_length_yy is not None:
-            try:
-                eff_len_yy = f"{float(self.effective_length_yy):.2f}"
-            except Exception:
-                eff_len_yy = str(self.effective_length_yy)
-        out_list.append(("effective_length_yy", "Effective Length (YY)", TYPE_TEXTBOX, eff_len_yy, True))
-        print("[DEBUG][output_values] Forced Effective Length YY:", eff_len_yy)
 
         return out_list
 

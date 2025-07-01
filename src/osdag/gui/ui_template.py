@@ -2670,11 +2670,16 @@ class Window(QMainWindow):
                         k2.clear()
                         for values in val[k2_key_name]:
                             k2.addItem(str(values))
-                if isinstance(k2, QtWidgets.QLineEdit):
-                    k2.setText(str(val[k2_key_name]))
-                if isinstance(k2, QtWidgets.QLabel):
-                        pixmap1 = QPixmap(val[k2_key_name])
-                        k2.setPixmap(pixmap1)
+                    if isinstance(k2, QtWidgets.QLineEdit):
+                        k2.setEnabled(True)
+                        k2.setReadOnly(False)
+                    if isinstance(val, dict) and k2_key_name in val:
+                        k2.setText(str(val[k2_key_name]))
+
+                    if isinstance(k2, QtWidgets.QLabel):
+                        if isinstance(val, dict) and k2_key_name in val:
+                            pixmap1 = QPixmap(val[k2_key_name])
+                            k2.setPixmap(pixmap1)
 
             if typ == TYPE_OVERWRITE_VALIDATION and not val["Validation"][0]:
                 QMessageBox.warning(tab, "Warning", val["Validation"][1])
@@ -2689,7 +2694,7 @@ class Window(QMainWindow):
         else:
             current_list = connectdb(arg)
         text = self.designPrefDialog.ui.findChild(QtWidgets.QWidget, tab_key).text()
-        key = self.dockWidgetContents.findChild(QtWidgets.QWidget, key_name)
+        key = self.dockWidif.isinstancegetContents.findChild(QtWidgets.QWidget, key_name)
 
         if key_type == TYPE_COMBOBOX:
             if text == "":

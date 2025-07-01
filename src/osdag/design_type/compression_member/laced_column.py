@@ -777,8 +777,6 @@ class LacedColumn(Member):
         eff_len_yy = ''
         eff_len_zz = ''
         if flag:
-            
-            # Always use the actual calculated values
             out_list.append((None, "Effective Length", TYPE_TITLE, None, True))
             if hasattr(self, 'effective_length_yy') and self.effective_length_yy is not None:
                 eff_len_yy = safe_display(self.effective_length_yy)

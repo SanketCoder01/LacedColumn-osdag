@@ -842,7 +842,7 @@ class Ui_Form(QDialog):
 
         # if ch.objectName() == "pushButton_Download_" + name:   # If Download button
         if ch:
-            conn = sqlite3.connect(PATH_TO_DATABASE)
+            conn = sqlite3.connect("osdag.db")
             c = conn.cursor()
             if table == "Beams":
                 c.execute("SELECT count(*) FROM Beams WHERE Designation = ?", (Designation_c,))
@@ -949,7 +949,7 @@ class Ui_Form(QDialog):
 
         # if ch.objectName() ==  "pushButton_Download_" + name:
         if ch:
-            conn = sqlite3.connect(PATH_TO_DATABASE)
+            conn = sqlite3.connect("osdag.db")
 
             c = conn.cursor()
             c.execute("SELECT count(*) FROM Beams WHERE Designation = ?", (Designation_b,))

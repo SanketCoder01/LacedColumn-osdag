@@ -123,6 +123,21 @@ class QTextEditLogger(QObject, logging.Handler):
         self.text_edit.append(msg)
 
 class LacedColumn(Member):
+    def calculate_effective_length_yy(self, end_condition_1, end_condition_2, unsupported_length_yy):
+        """
+        Calculate the effective length (YY) using IS 800:2007 Table 11 logic.
+        :param end_condition_1: End condition at one end (e.g., 'Fixed', 'Hinged', etc.)
+        :param end_condition_2: End condition at other end
+        :param unsupported_length_yy: Unsupported length in mm
+        :return: Effective length in mm
+        """
+        # Table 11 typical K values (simplified)
+        # Fixed-Fixed: 0.65, Fixed-Hinged: 0.8, Hinged-Hinged: 1.0, Fixed-Free: 2.0
+        conds = {('Fixed', 'Fixed'): 0.65, ('Fixed', 'Hinged'): 0.8, ('Hinged', 'Fixed'): 0.8,
+                 ('Hinged', 'Hinged'): 1.0, ('Fixed', 'Free'): 2.0, ('Free', 'Fixed'): 2.0}
+        k = conds.get((end_condition_1, end_condition_2), 1.0)
+        return k * unsupported_length_yy
+
     def print_all_section_results(self):
         """
         Print all calculated section results to the terminal for debugging and verification.
@@ -151,6 +166,142 @@ class LacedColumn(Member):
             print('[DEBUG] Exception in minimize event patch:', e)
         return super().event(event)
     def calculate(self, design_dictionary):
+        # --- PATCH: Ensure end condition values are always present and correct in design_dictionary ---
+        # Try to extract from possible keys, fallback to UI attributes if missing, and update dictionary
+        # This ensures end1/end2 are always correct for calculation and output
+        # 1. Try to get from dictionary as before
+        end1 = (
+            design_dictionary.get('End Condition 1', None)
+            or design_dictionary.get('KEY_END1', None)
+            or design_dictionary.get('end1', None)
+            or design_dictionary.get('End_1', None)
+        )
+        end2 = (
+            design_dictionary.get('End Condition 2', None)
+            or design_dictionary.get('KEY_END2', None)
+            or design_dictionary.get('end2', None)
+            or design_dictionary.get('End_2', None)
+        )
+        # 2. If still missing, try to get from UI combo boxes if available
+        if (not end1 or isinstance(end1, list)) and hasattr(self, 'end1_combo'):
+            try:
+                end1_val = self.end1_combo.currentText() if hasattr(self.end1_combo, 'currentText') else None
+                if end1_val and isinstance(end1_val, str):
+                    end1 = end1_val
+            except Exception:
+                pass
+        if (not end2 or isinstance(end2, list)) and hasattr(self, 'end2_combo'):
+            try:
+                end2_val = self.end2_combo.currentText() if hasattr(self.end2_combo, 'currentText') else None
+                if end2_val and isinstance(end2_val, str):
+                    end2 = end2_val
+            except Exception:
+                pass
+        # 3. If still missing, try to get from UI line edits (if used)
+        if (not end1 or isinstance(end1, list)) and hasattr(self, 'end1_lineedit'):
+            try:
+                end1_val = self.end1_lineedit.text() if hasattr(self.end1_lineedit, 'text') else None
+                if end1_val and isinstance(end1_val, str):
+                    end1 = end1_val
+            except Exception:
+                pass
+        if (not end2 or isinstance(end2, list)) and hasattr(self, 'end2_lineedit'):
+            try:
+                end2_val = self.end2_lineedit.text() if hasattr(self.end2_lineedit, 'text') else None
+                if end2_val and isinstance(end2_val, str):
+                    end2 = end2_val
+            except Exception:
+                pass
+        # 4. If still missing, try to get from attributes set by UI (if any)
+        if (not end1 or isinstance(end1, list)) and hasattr(self, 'end1'):
+            if isinstance(self.end1, str):
+                end1 = self.end1
+        if (not end2 or isinstance(end2, list)) and hasattr(self, 'end2'):
+            if isinstance(self.end2, str):
+                end2 = self.end2
+        # 5. Update the dictionary so the rest of the method works as expected
+        if end1 and isinstance(end1, str):
+            design_dictionary['End Condition 1'] = end1
+            design_dictionary['End_1'] = end1
+        if end2 and isinstance(end2, str):
+            design_dictionary['End Condition 2'] = end2
+            design_dictionary['End_2'] = end2
+
+        print("[DEBUG][calculate] Called with design_dictionary:", design_dictionary)
+        print("[DEBUG][calculate] All keys in design_dictionary:")
+        for k in design_dictionary:
+            print(f"    {k!r}: {design_dictionary[k]!r}")
+
+        # --- Patch: Calculate and assign effective length YY using IS 800:2007 Table 11 logic ---
+        try:
+            # --- Patch: Forcefully push calculated values for output dock ---
+            unsupported_length_yy = (
+                design_dictionary.get('Unsupported Length YY', None)
+                or design_dictionary.get('KEY_UNSUPPORTED_LEN_YY', None)
+                or design_dictionary.get('unsupported_length_yy', None)
+                or design_dictionary.get('Unsupported.Length_yy', None)
+            )
+            # Warn if end1 or end2 is a list, not a string
+            if isinstance(end1, list):
+                print(f"[WARNING][calculate] end1 is a list, not a string: {end1}")
+                end1 = None
+            if isinstance(end2, list):
+                print(f"[WARNING][calculate] end2 is a list, not a string: {end2}")
+                end2 = None
+            print(f"[DEBUG][calculate] Inputs for effective_length_yy calculation: end1={end1!r}, end2={end2!r}, unsupported_length_yy={unsupported_length_yy!r}")
+            if not end1:
+                print("[DEBUG][calculate] MISSING: end1 is not set or empty!")
+            if not end2:
+                print("[DEBUG][calculate] MISSING: end2 is not set or empty!")
+            if not unsupported_length_yy:
+                print("[DEBUG][calculate] MISSING: unsupported_length_yy is not set or empty!")
+            if end1 and end2 and unsupported_length_yy:
+                try:
+                    unsupported_length_yy = float(unsupported_length_yy)
+                    eff_len_yy_calc = self.calculate_effective_length_yy(end1, end2, unsupported_length_yy)
+                    self.effective_length_yy = eff_len_yy_calc
+                    if not hasattr(self, 'result') or not isinstance(self.result, dict):
+                        self.result = {}
+                    self.result['effective_length_yy'] = eff_len_yy_calc
+                    self.result['Effective_length_yy'] = eff_len_yy_calc
+                    self.result['Effective Length YY'] = eff_len_yy_calc
+                    print(f"[DEBUG] Calculated effective_length_yy: {eff_len_yy_calc}")
+                except Exception as e:
+                    print('[DEBUG] Could not calculate effective_length_yy:', e)
+            # --- Buckling Curve ZZ ---
+            bc_zz_val = None
+            if hasattr(self, 'result_bc_zz') and self.result_bc_zz:
+                bc_zz_val = self.result_bc_zz
+            elif hasattr(self, 'optimum_section_ur_results') and self.optimum_section_ur_results:
+                best_ur = min(self.optimum_section_ur_results.keys())
+                best_result = self.optimum_section_ur_results[best_ur]
+                for k in ['Buckling_curve_zz', 'Buckling Curve ZZ', 'buckling_curve_zz']:
+                    if k in best_result:
+                        bc_zz_val = best_result[k]
+                        break
+            if bc_zz_val is not None:
+                self.result['buckling_curve_zz'] = bc_zz_val
+                self.result['Buckling_curve_zz'] = bc_zz_val
+                self.result['Buckling Curve ZZ'] = bc_zz_val
+                self.result_bc_zz = bc_zz_val
+            # --- ND ESR YY ---
+            nd_esr_yy_val = None
+            if hasattr(self, 'result_nd_esr_yy') and self.result_nd_esr_yy is not None:
+                nd_esr_yy_val = self.result_nd_esr_yy
+            elif hasattr(self, 'optimum_section_ur_results') and self.optimum_section_ur_results:
+                best_ur = min(self.optimum_section_ur_results.keys())
+                best_result = self.optimum_section_ur_results[best_ur]
+                for k in ['ND_ESR_yy', 'nd_esr_yy', 'ND ESR YY']:
+                    if k in best_result:
+                        nd_esr_yy_val = best_result[k]
+                        break
+            if nd_esr_yy_val is not None:
+                self.result['nd_esr_yy'] = nd_esr_yy_val
+                self.result['ND_ESR_yy'] = nd_esr_yy_val
+                self.result['ND ESR YY'] = nd_esr_yy_val
+                self.result_nd_esr_yy = nd_esr_yy_val
+        except Exception as e:
+            print('[DEBUG] Error in effective_length_yy/buckling_curve_zz/nd_esr_yy patch:', e)
         """
         Perform all calculations for the laced column based on user input and assign results to output fields.
         This method is called explicitly from the UI after user input is collected.
@@ -182,39 +333,29 @@ class LacedColumn(Member):
                     best_ur = min(self.optimum_section_ur_results.keys())
                 best_result = self.optimum_section_ur_results[best_ur]
                 # Assign all output fields for UI/terminal
-                # Patch: Always assign even if value is a string or not a float
-                self.effective_length_yy = best_result.get('Effective_length_yy')
-                if self.effective_length_yy is None:
-                    self.effective_length_yy = best_result.get('Effective Length YY')
-                self.effective_length_zz = best_result.get('Effective_length_zz')
-                if self.effective_length_zz is None:
-                    self.effective_length_zz = best_result.get('Effective Length ZZ')
-                self.effective_sr_yy = best_result.get('Effective_sr_yy')
-                if self.effective_sr_yy is None:
-                    self.effective_sr_yy = best_result.get('Effective_SR_yy')
-                self.effective_sr_zz = best_result.get('Effective_sr_zz')
-                if self.effective_sr_zz is None:
-                    self.effective_sr_zz = best_result.get('Effective_SR_zz')
+                # Only assign actual calculated values for effective length and slenderness, never allow 'mpc' or similar text
+                def get_numeric_value(keys):
+                    for k in keys:
+                        v = best_result.get(k)
+                        if v is not None:
+                            # If value is a string and contains 'mpc' or is not a number, skip
+                            if isinstance(v, str):
+                                if 'mpc' in v.lower():
+                                    continue
+                                try:
+                                    return float(v)
+                                except Exception:
+                                    continue
+                            elif isinstance(v, (int, float)):
+                                return v
+                    return None
 
-                # Patch: Also assign string values if present (for debug cases)
-                if self.effective_length_yy is None:
-                    self.effective_length_yy = best_result.get('Effective_length_yy') or best_result.get('Effective Length YY')
-                if self.effective_length_zz is None:
-                    self.effective_length_zz = best_result.get('Effective_length_zz') or best_result.get('Effective Length ZZ')
-                if self.effective_sr_yy is None:
-                    self.effective_sr_yy = best_result.get('Effective_sr_yy') or best_result.get('Effective_SR_yy')
-                if self.effective_sr_zz is None:
-                    self.effective_sr_zz = best_result.get('Effective_sr_zz') or best_result.get('Effective_SR_zz')
-
-                # Patch: If still None, try alternate keys from debug output
-                if self.effective_length_yy is None:
-                    self.effective_length_yy = best_result.get('Effective_length_yy') or best_result.get('Effective_length_yy') or best_result.get('Effective Length YY') or best_result.get('Effective_length_yy') or best_result.get('Effective_length_yy') or best_result.get('Effective_length_yy') or best_result.get('Effective_length_yy') or best_result.get('Effective_length_yy') or best_result.get('Effective_length_yy') or best_result.get('Effective_length_yy') or best_result.get('Effective_length_yy') or best_result.get('Effective_length_yy') or best_result.get('Effective_length_yy') or best_result.get('Effective_length_yy') or best_result.get('Effective_length_yy') or best_result.get('Effective_length_yy') or best_result.get('Effective_length_yy') or best_result.get('Effective_length_yy') or best_result.get('Effective_length_yy') or best_result.get('Effective_length_yy')
-                if self.effective_length_zz is None:
-                    self.effective_length_zz = best_result.get('Effective_length_zz') or best_result.get('Effective_length_zz') or best_result.get('Effective Length ZZ')
-                if self.effective_sr_yy is None:
-                    self.effective_sr_yy = best_result.get('Effective_sr_yy') or best_result.get('Effective_sr_yy') or best_result.get('Effective_SR_yy')
-                if self.effective_sr_zz is None:
-                    self.effective_sr_zz = best_result.get('Effective_sr_zz') or best_result.get('Effective_sr_zz') or best_result.get('Effective_SR_zz')
+                # Only assign if not already set to a valid number
+                if not (hasattr(self, 'effective_length_yy') and isinstance(self.effective_length_yy, (int, float)) and self.effective_length_yy > 0):
+                    self.effective_length_yy = get_numeric_value(['Effective_length_yy', 'Effective Length YY', 'effective_length_yy'])
+                self.effective_length_zz = get_numeric_value(['Effective_length_zz', 'Effective Length ZZ', 'effective_length_zz'])
+                self.effective_sr_yy = get_numeric_value(['Effective_sr_yy', 'Slenderness YY', 'effective_sr_yy', 'Slenderness_yy'])
+                self.effective_sr_zz = get_numeric_value(['Effective_sr_zz', 'Slenderness ZZ', 'effective_sr_zz', 'Slenderness_zz'])
                 self.result_fcd = best_result.get('FCD')
                 self.result_capacity = best_result.get('Capacity')
                 self.result_UR = best_ur
@@ -259,12 +400,15 @@ class LacedColumn(Member):
             print('[ERROR] Exception in LacedColumn.calculate:', e)
             import traceback
             print(traceback.format_exc())
+        print("[DEBUG][calculate] self.effective_length_yy after calculation:", getattr(self, 'effective_length_yy', None))
 
     def reset_output_state(self):
         """
         Reset all output/calculated fields to None or empty, so the output dock shows cleared values.
-        Call this on module open/close or navigation away.
+        Call this ONLY on module open/close or navigation away.
+        DO NOT call this after calculation, or you will lose calculated values for output.
         """
+        print("[DEBUG][reset_output_state] Called! This will clear all calculated values.")
         # Main calculated values
         self.effective_length_yy = None
         self.effective_length_zz = None
@@ -759,6 +903,17 @@ class LacedColumn(Member):
         return lst
 
     def output_values(self, flag):
+        # --- DEBUG: Print effective_length_yy at the start of output_values ---
+        print("[DEBUG][output_values] self.effective_length_yy:", getattr(self, 'effective_length_yy', None))
+        if not hasattr(self, 'effective_length_yy') or self.effective_length_yy is None:
+            print("[WARNING][output_values] self.effective_length_yy is missing or None at output dock refresh!")
+        def get_numeric(val):
+            try:
+                if val is None or val == '' or val in ['a', 'A']:
+                    return None
+                return float(val)
+            except Exception:
+                return None
         """
         Output the actual calculated values for effective length (YY) and slenderness ratio (YY), not classification text.
         """
@@ -773,16 +928,101 @@ class LacedColumn(Member):
             except Exception:
                 return str(val)
 
-        # Effective Lengths
+        # --- Always show Effective Lengths (YY/ZZ) at the top of output dock ---
         eff_len_yy = ''
         eff_len_zz = ''
-        if flag:
-            out_list.append((None, "Effective Length", TYPE_TITLE, None, True))
-            if hasattr(self, 'effective_length_yy') and self.effective_length_yy is not None:
-                eff_len_yy = safe_display(self.effective_length_yy)
-            if hasattr(self, 'effective_length_zz') and self.effective_length_zz is not None:
-                eff_len_zz = safe_display(self.effective_length_zz)
-        out_list.append((KEY_EFF_LEN_YY, "Effective Length (YY)", TYPE_TEXTBOX, eff_len_yy, True))
+        out_list.append((None, "Effective Length", TYPE_TITLE, None, True))
+        # Forcefully show debug/calculation info for effective_length_yy, even if not used in output
+        debug_yy_val = None
+        if hasattr(self, 'effective_length_yy'):
+            try:
+                debug_yy_val = float(self.effective_length_yy)
+            except (TypeError, ValueError):
+                debug_yy_val = None
+        if debug_yy_val is not None:
+            debug_yy = f"[DEBUG] Calculated effective_length_yy: {debug_yy_val}"
+            out_list.append((None, debug_yy, TYPE_TITLE, None, True))
+        if hasattr(self, 'effective_length_zz') and self.effective_length_zz is not None:
+            try:
+                vnum = float(self.effective_length_zz)
+                debug_zz = f"[DEBUG] Calculated effective_length_zz: {vnum}"
+                out_list.append((None, debug_zz, TYPE_TITLE, None, True))
+            except (TypeError, ValueError):
+                pass
+        if hasattr(self, 'result') and isinstance(self.result, dict):
+            # Only use numeric values for effective length, skip any string like 'mpc400', 'mpc', etc.
+            for k in ['effective_length_yy', 'Effective_length_yy', 'Effective Length YY']:
+                v = self.result.get(k, None)
+                try:
+                    vnum = float(v)
+                    eff_len_yy = safe_display(vnum)
+                    break
+                except (TypeError, ValueError):
+                    continue
+            for k in ['effective_length_zz', 'Effective_length_zz', 'Effective Length ZZ']:
+                v = self.result.get(k, None)
+                try:
+                    vnum = float(v)
+                    eff_len_zz = safe_display(vnum)
+                    break
+                except (TypeError, ValueError):
+                    continue
+        # Fallback to attribute if not found in result, only if numeric
+        if not eff_len_yy and hasattr(self, 'effective_length_yy'):
+            try:
+                vnum = float(self.effective_length_yy)
+                eff_len_yy = safe_display(vnum)
+            except (TypeError, ValueError):
+                pass
+        if not eff_len_zz and hasattr(self, 'effective_length_zz'):
+            try:
+                vnum = float(self.effective_length_zz)
+                eff_len_zz = safe_display(vnum)
+            except (TypeError, ValueError):
+                pass
+        # Fallback to optimum_section_ur_results if still not found, only if numeric
+        if (not eff_len_yy or not eff_len_zz) and hasattr(self, 'optimum_section_ur_results') and self.optimum_section_ur_results:
+            best_ur = min(self.optimum_section_ur_results.keys())
+            best_result = self.optimum_section_ur_results[best_ur]
+            if not eff_len_yy:
+                for k in ['Effective_length_yy', 'Effective Length YY', 'effective_length_yy']:
+                    v = best_result.get(k, None)
+                    try:
+                        vnum = float(v)
+                        eff_len_yy = safe_display(vnum)
+                        break
+                    except (TypeError, ValueError):
+                        continue
+            if not eff_len_zz:
+                for k in ['Effective_length_zz', 'Effective Length ZZ', 'effective_length_zz']:
+                    v = best_result.get(k, None)
+                    try:
+                        vnum = float(v)
+                        eff_len_zz = safe_display(vnum)
+                        break
+                    except (TypeError, ValueError):
+                        continue
+        # --- Final fallback: if eff_len_yy is still blank, but self.effective_length_yy is set and numeric, use it ---
+        if (not eff_len_yy or eff_len_yy == '') and hasattr(self, 'effective_length_yy'):
+            try:
+                vnum = float(self.effective_length_yy)
+                eff_len_yy = safe_display(vnum)
+            except (TypeError, ValueError):
+                pass
+        if (not eff_len_zz or eff_len_zz == '') and hasattr(self, 'effective_length_zz'):
+            try:
+                vnum = float(self.effective_length_zz)
+                eff_len_zz = safe_display(vnum)
+            except (TypeError, ValueError):
+                pass
+        # --- FORCE: Always show self.effective_length_yy as string in output dock for testing ---
+        eff_len_yy_forced = ''
+        if hasattr(self, 'effective_length_yy') and self.effective_length_yy is not None:
+            try:
+                eff_len_yy_forced = str(float(self.effective_length_yy))
+            except Exception:
+                eff_len_yy_forced = str(self.effective_length_yy)
+        out_list.append((KEY_EFF_LEN_YY, "Effective Length (YY)", TYPE_TEXTBOX, eff_len_yy_forced, True))
         out_list.append((KEY_EFF_LEN_ZZ, "Effective Length (ZZ)", TYPE_TEXTBOX, eff_len_zz, True))
 
         # Slenderness Ratios
@@ -790,11 +1030,43 @@ class LacedColumn(Member):
         slender_yy = ''
         slender_zz = ''
         if flag:
-            # Always use the actual calculated values
-            if hasattr(self, 'effective_sr_yy') and self.effective_sr_yy is not None:
-                slender_yy = safe_display(self.effective_sr_yy)
-            if hasattr(self, 'effective_sr_zz') and self.effective_sr_zz is not None:
-                slender_zz = safe_display(self.effective_sr_zz)
+            slender_yy_val = None
+            slender_zz_val = None
+            # 1. Try optimum_section_ur_results best result FIRST (most reliable)
+            if hasattr(self, 'optimum_section_ur_results') and self.optimum_section_ur_results:
+                best_ur = min(self.optimum_section_ur_results.keys())
+                best_result = self.optimum_section_ur_results[best_ur]
+                for k in ['Effective_sr_yy', 'Slenderness YY', 'effective_sr_yy', 'Slenderness_yy']:
+                    if k in best_result:
+                        try:
+                            v = get_numeric(best_result[k])
+                        except Exception:
+                            v = None
+                        if v is not None:
+                            slender_yy_val = v
+                            break
+                for k in ['Effective_sr_zz', 'Slenderness ZZ', 'effective_sr_zz', 'Slenderness_zz']:
+                    if k in best_result:
+                        try:
+                            v = get_numeric(best_result[k])
+                        except Exception:
+                            v = None
+                        if v is not None:
+                            slender_zz_val = v
+                            break
+            # 2. Fallback to direct attribute if not found above, with robust error handling
+            if slender_yy_val is None and hasattr(self, 'effective_sr_yy'):
+                try:
+                    slender_yy_val = get_numeric(self.effective_sr_yy)
+                except Exception:
+                    slender_yy_val = None
+            if slender_zz_val is None and hasattr(self, 'effective_sr_zz'):
+                try:
+                    slender_zz_val = get_numeric(self.effective_sr_zz)
+                except Exception:
+                    slender_zz_val = None
+            slender_yy = safe_display(slender_yy_val) if slender_yy_val is not None else ''
+            slender_zz = safe_display(slender_zz_val) if slender_zz_val is not None else ''
         out_list.append((KEY_SLENDER_YY, "Slenderness Ratio (YY)", TYPE_TEXTBOX, slender_yy, True))
         out_list.append((KEY_SLENDER_ZZ, "Slenderness Ratio (ZZ)", TYPE_TEXTBOX, slender_zz, True))
         
@@ -830,16 +1102,27 @@ class LacedColumn(Member):
                     ur_value = safe_display(best_ur)
         out_list.append(("utilization_ratio", "Utilization Ratio", TYPE_TEXTBOX, ur_value, True))
         
-        # Section Classification
+        # Section Classification (show as Plastic, Semi-Compact, etc.)
         out_list.append((None, "Section Classification", TYPE_TITLE, None, True))
         section_class = ''
         if flag:
-            if hasattr(self, 'result_section_class') and self.result_section_class:
-                section_class = safe_display(self.result_section_class)
-            elif hasattr(self, 'optimum_section_ur_results') and self.optimum_section_ur_results:
-                best_ur = min(self.optimum_section_ur_results.keys()) if self.optimum_section_ur_results else None
-                if best_ur:
-                    section_class = safe_display(self.optimum_section_ur_results[best_ur].get('Section class', ''))
+            # Try self.result first
+            if hasattr(self, 'result') and isinstance(self.result, dict):
+                for k in ['section_class', 'Section class', 'Section_class', 'sectionClass']:
+                    if k in self.result and self.result[k] not in [None, '', 'a', 'A']:
+                        section_class = str(self.result[k])
+                        break
+            # Fallback to attribute
+            if not section_class and hasattr(self, 'result_section_class') and self.result_section_class not in [None, '', 'a', 'A']:
+                section_class = str(self.result_section_class)
+            # Fallback to optimum_section_ur_results if still not found
+            if not section_class and hasattr(self, 'optimum_section_ur_results') and self.optimum_section_ur_results:
+                best_ur = min(self.optimum_section_ur_results.keys())
+                best_result = self.optimum_section_ur_results[best_ur]
+                for k in ['Section class', 'section_class', 'Section_class', 'sectionClass']:
+                    if k in best_result and best_result[k] not in [None, '', 'a', 'A']:
+                        section_class = str(best_result[k])
+                        break
         out_list.append(("section_class", "Section Class", TYPE_TEXTBOX, section_class, True))
         
         # Effective Area
@@ -859,20 +1142,40 @@ class LacedColumn(Member):
         bc_yy = ''
         bc_zz = ''
         if flag:
-            if hasattr(self, 'result_bc_yy') and self.result_bc_yy:
-                bc_yy = safe_display(self.result_bc_yy)
-            elif hasattr(self, 'optimum_section_ur_results') and self.optimum_section_ur_results:
-                best_ur = min(self.optimum_section_ur_results.keys()) if self.optimum_section_ur_results else None
-                if best_ur:
-                    bc_yy = safe_display(self.optimum_section_ur_results[best_ur].get('Buckling_curve_yy', ''))
-            if hasattr(self, 'result_bc_zz') and self.result_bc_zz:
-                bc_zz = safe_display(self.result_bc_zz)
-            elif hasattr(self, 'optimum_section_ur_results') and self.optimum_section_ur_results:
-                best_ur = min(self.optimum_section_ur_results.keys()) if self.optimum_section_ur_results else None
-                if best_ur:
-                    bc_zz = safe_display(self.optimum_section_ur_results[best_ur].get('Buckling_curve_zz', ''))
-        out_list.append(("buckling_curve_yy", "Buckling Curve (YY)", TYPE_TEXTBOX, bc_yy, True))
-        out_list.append(("buckling_curve_zz", "Buckling Curve (ZZ)", TYPE_TEXTBOX, bc_zz, True))
+            # --- UI Patch: Always show the latest value from self.result for output dock fields ---
+            if hasattr(self, 'result') and isinstance(self.result, dict):
+                for k in ['buckling_curve_yy', 'Buckling_curve_yy', 'Buckling Curve YY']:
+                    if k in self.result and self.result[k] not in [None, '', 'a', 'A']:
+                        bc_yy = str(self.result[k])
+                        break
+                for k in ['buckling_curve_zz', 'Buckling_curve_zz', 'Buckling Curve ZZ']:
+                    if k in self.result and self.result[k] not in [None, '', 'a', 'A']:
+                        bc_zz = str(self.result[k])
+                        break
+            # Fallback to attribute if not found in result
+            if not bc_yy and hasattr(self, 'result_bc_yy') and self.result_bc_yy not in [None, '', 'a', 'A']:
+                bc_yy = str(self.result_bc_yy)
+            if not bc_zz and hasattr(self, 'result_bc_zz') and self.result_bc_zz not in [None, '', 'a', 'A']:
+                bc_zz = str(self.result_bc_zz)
+            # Fallback to optimum_section_ur_results if still not found
+            if (not bc_yy or not bc_zz) and hasattr(self, 'optimum_section_ur_results') and self.optimum_section_ur_results:
+                best_ur = min(self.optimum_section_ur_results.keys())
+                best_result = self.optimum_section_ur_results[best_ur]
+                if not bc_yy:
+                    for k in ['Buckling_curve_yy', 'Buckling Curve YY', 'buckling_curve_yy']:
+                        if k in best_result and best_result[k] not in [None, '', 'a', 'A']:
+                            bc_yy = str(best_result[k])
+                            break
+                if not bc_zz:
+                    for k in ['Buckling_curve_zz', 'Buckling Curve ZZ', 'buckling_curve_zz']:
+                        if k in best_result and best_result[k] not in [None, '', 'a', 'A']:
+                            bc_zz = str(best_result[k])
+                            break
+            # If bc_zz is still 'A' (default), set to blank
+            if bc_zz == 'A':
+                bc_zz = ''
+            out_list.append(("buckling_curve_yy", "Buckling Curve (YY)", TYPE_TEXTBOX, bc_yy, True))
+            out_list.append(("buckling_curve_zz", "Buckling Curve (ZZ)", TYPE_TEXTBOX, bc_zz, True))
         
         # Imperfection Factor
         out_list.append((None, "Imperfection Factor", TYPE_TITLE, None, True))
@@ -919,20 +1222,37 @@ class LacedColumn(Member):
         nd_esr_yy = ''
         nd_esr_zz = ''
         if flag:
-            if hasattr(self, 'result_nd_esr_yy') and self.result_nd_esr_yy is not None:
+            # --- UI Patch: Always show the latest value from self.result for output dock fields ---
+            if hasattr(self, 'result') and isinstance(self.result, dict):
+                for k in ['nd_esr_yy', 'ND_ESR_yy', 'ND ESR YY']:
+                    if k in self.result and self.result[k] not in [None, '', 'a', 'A']:
+                        nd_esr_yy = safe_display(self.result[k])
+                        break
+                for k in ['nd_esr_zz', 'ND_ESR_zz', 'ND ESR ZZ']:
+                    if k in self.result and self.result[k] not in [None, '', 'a', 'A']:
+                        nd_esr_zz = safe_display(self.result[k])
+                        break
+            # Fallback to attribute if not found in result
+            if not nd_esr_yy and hasattr(self, 'result_nd_esr_yy') and self.result_nd_esr_yy not in [None, '', 'a', 'A']:
                 nd_esr_yy = safe_display(self.result_nd_esr_yy)
-            elif hasattr(self, 'optimum_section_ur_results') and self.optimum_section_ur_results:
-                best_ur = min(self.optimum_section_ur_results.keys()) if self.optimum_section_ur_results else None
-                if best_ur:
-                    nd_esr_yy = safe_display(self.optimum_section_ur_results[best_ur].get('ND_ESR_yy', ''))
-            if hasattr(self, 'result_nd_esr_zz') and self.result_nd_esr_zz is not None:
+            if not nd_esr_zz and hasattr(self, 'result_nd_esr_zz') and self.result_nd_esr_zz not in [None, '', 'a', 'A']:
                 nd_esr_zz = safe_display(self.result_nd_esr_zz)
-            elif hasattr(self, 'optimum_section_ur_results') and self.optimum_section_ur_results:
-                best_ur = min(self.optimum_section_ur_results.keys()) if self.optimum_section_ur_results else None
-                if best_ur:
-                    nd_esr_zz = safe_display(self.optimum_section_ur_results[best_ur].get('ND_ESR_zz', ''))
-        out_list.append(("nd_esr_yy", "ND ESR (YY)", TYPE_TEXTBOX, nd_esr_yy, True))
-        out_list.append(("nd_esr_zz", "ND ESR (ZZ)", TYPE_TEXTBOX, nd_esr_zz, True))
+            # Fallback to optimum_section_ur_results if still not found
+            if (not nd_esr_yy or not nd_esr_zz) and hasattr(self, 'optimum_section_ur_results') and self.optimum_section_ur_results:
+                best_ur = min(self.optimum_section_ur_results.keys())
+                best_result = self.optimum_section_ur_results[best_ur]
+                if not nd_esr_yy:
+                    for k in ['ND_ESR_yy', 'nd_esr_yy', 'ND ESR YY']:
+                        if k in best_result and best_result[k] not in [None, '', 'a', 'A']:
+                            nd_esr_yy = safe_display(best_result[k])
+                            break
+                if not nd_esr_zz:
+                    for k in ['ND_ESR_zz', 'nd_esr_zz', 'ND ESR ZZ']:
+                        if k in best_result and best_result[k] not in [None, '', 'a', 'A']:
+                            nd_esr_zz = safe_display(best_result[k])
+                            break
+            out_list.append(("nd_esr_yy", "ND ESR (YY)", TYPE_TEXTBOX, nd_esr_yy, True))
+            out_list.append(("nd_esr_zz", "ND ESR (ZZ)", TYPE_TEXTBOX, nd_esr_zz, True))
         
         # Phi Values
         out_list.append((None, "Phi Values", TYPE_TITLE, None, True))
@@ -1066,6 +1386,16 @@ class LacedColumn(Member):
                     lacing_spacing = safe_display(self.optimum_section_ur_results[best_ur].get('lacing_spacing', ''))
         out_list.append(("lacing_spacing", "Lacing Spacing (L0) (mm)", TYPE_TEXTBOX, lacing_spacing, True))
         
+        # --- FORCE: Always show self.effective_length_yy ---
+        eff_len_yy = ''
+        if hasattr(self, 'effective_length_yy') and self.effective_length_yy is not None:
+            try:
+                eff_len_yy = f"{float(self.effective_length_yy):.2f}"
+            except Exception:
+                eff_len_yy = str(self.effective_length_yy)
+        out_list.append(("effective_length_yy", "Effective Length (YY)", TYPE_TEXTBOX, eff_len_yy, True))
+        print("[DEBUG][output_values] Forced Effective Length YY:", eff_len_yy)
+
         return out_list
 
     def func_for_validation(self, design_dictionary):
@@ -1440,6 +1770,7 @@ class LacedColumn(Member):
                 self.length_yy,
                 end_1=self.end_1_y,
                 end_2=self.end_2_y)
+            print(f"[DEBUG] Calculated effective_length_yy: {self.effective_length_yy}")
 
             # 2.3 - Effective slenderness ratio
             self.effective_sr_zz = self.effective_length_zz / self.section_property.rad_of_gy_z
@@ -1778,7 +2109,12 @@ class LacedColumn(Member):
                     ]
 
                     # 1- Based on optimum UR
-                    self.optimum_section_ur_results[self.ur] = {}
+                    section_result = {}
+                    section_result['Effective_length_yy'] = self.effective_length_yy
+                    section_result['Effective_sr_yy'] = self.effective_sr_yy
+                    section_result['Effective_sr_zz'] = self.effective_sr_zz
+                    # ...store other results as needed...
+                    self.optimum_section_ur_results[self.ur] = section_result
                     list_2 = self.list_zz + self.list_yy
                     for j in list_1:
                         for k in list_2:

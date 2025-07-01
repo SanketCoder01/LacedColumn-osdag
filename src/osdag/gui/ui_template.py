@@ -952,6 +952,7 @@ class Window(QMainWindow):
         fields = 0
         title_repeat = 1
         for option in out_list:
+
             lable = option[1]
             output_type = option[2]
             if output_type not in [TYPE_TITLE, TYPE_IMAGE, TYPE_MODULE]:
@@ -971,6 +972,11 @@ class Window(QMainWindow):
                 r = QtWidgets.QLineEdit(self.dockWidgetContents_out)
                 r.setObjectName(option[0])
                 r.setReadOnly(True)
+                # --- PATCH: Set the value of the output textbox from option[3] ---
+                if option[3] is not None:
+                    r.setText(str(option[3]))
+                else:
+                    r.setText("")
                 out_layout2.addWidget(r, j, 2, 1, 1)
                 r.setVisible(True if option[4] else False)
                 fields += 1
@@ -1353,10 +1359,10 @@ class Window(QMainWindow):
         self.actionZoom_in.triggered.connect(lambda: self.display.ZoomFactor(1.1))
         self.actionPan.triggered.connect(lambda: self.assign_display_mode(mode="pan"))
         self.actionRotate_3D_model.triggered.connect(lambda: self.assign_display_mode(mode="rotate"))
-        self.actionDownload_column.triggered.connect(lambda: self.designPrefDialog.ui.download_Database(table="Columns"))
-        self.actionDownload_beam.triggered.connect(lambda: self.designPrefDialog.ui.download_Database(table="Beams"))
-        self.actionDownload_channel.triggered.connect(lambda: self.designPrefDialog.ui.download_Database(table="Channels"))
-        self.actionDownload_angle.triggered.connect(lambda: self.designPrefDialog.ui.download_Database(table="Angles"))
+        self.actionDownload_column.triggered.connect(lambda: self.designPrefDialog.ui.download_Database(table="Columns") if self.designPrefDialog.ui is not None else None)
+        self.actionDownload_beam.triggered.connect(lambda: self.designPrefDialog.ui.download_Database(table="Beams") if self.designPrefDialog.ui is not None else None)
+        self.actionDownload_channel.triggered.connect(lambda: self.designPrefDialog.ui.download_Database(table="Channels") if self.designPrefDialog.ui is not None else None)
+        self.actionDownload_angle.triggered.connect(lambda: self.designPrefDialog.ui.download_Database(table="Angles") if self.designPrefDialog.ui is not None else None)
         self.actionReset_db.triggered.connect(self.database_reset)
         self.actionSample_Tutorials.triggered.connect(lambda: MyTutorials(self).exec())
         self.actionAbout_Osdag_2.triggered.connect(lambda: MyAboutOsdag(self).exec())
@@ -1611,8 +1617,8 @@ class Window(QMainWindow):
                         indx = val.index(str(value))
                         k2.setItemData(indx, QBrush(QColor("red")), Qt.TextColorRole)
             elif typ == TYPE_COMBOBOX_CUSTOMIZED:
-                k2.setCurrentIndex(0)
-                data[k2_key + "_customized"] = val
+                    k2.setCurrentIndex(0)
+                    data[k2_key + "_customized"] = val
             elif typ == TYPE_CUSTOM_MATERIAL:
                 if val:
                     self.new_material_dialog()
@@ -1791,9 +1797,9 @@ class Window(QMainWindow):
     '''
 
     def design_fn(self, op_list, data_list, main):
-        # --- Reset output/calculated state and clear output dock before new calculation ---
-        if hasattr(main, 'reset_output_state'):
-            main.reset_output_state()
+        # --- Remove reset_output_state call here to avoid clearing calculated values after calculation ---
+        # if hasattr(main, 'reset_output_state'):
+        #     main.reset_output_state()
         if hasattr(self, 'clear_output_fields'):
             self.clear_output_fields()
         design_dictionary = {}
@@ -1810,12 +1816,17 @@ class Window(QMainWindow):
                 module = op[1]
                 d1 = {op[0]: des_val}
             elif op[2] == TYPE_COMBOBOX_CUSTOMIZED:
-                try: 
-                    des_val = data_list[op[0] + "_customized"]
+                # Patch: For end condition fields, use the current text (string), not the customized list
+                if op[0] in ["End_1", "End_2", "End_3", "End_4", "EndCondition", "EndCondition_1", "EndCondition_2"]:
+                    des_val = widget.currentText()
                     d1 = {op[0]: des_val}
-                except:
-                    des_val = data_list["Member.Designation" + "_customized"]
-                    d1 = {op[0]: des_val}
+                else:
+                    try:
+                        des_val = data_list[op[0] + "_customized"]
+                        d1 = {op[0]: des_val}
+                    except:
+                        des_val = data_list["Member.Designation" + "_customized"]
+                        d1 = {op[0]: des_val}
             elif op[2] == TYPE_TEXTBOX:
                 des_val = widget.text()
                 d1 = {op[0]: des_val}
@@ -1826,8 +1837,14 @@ class Window(QMainWindow):
             else:
                 d1 = {}
             design_dictionary.update(d1)
-
             self.input_dock_inputs.update(d1)
+        # --- Patch: Always show debug value for effective_length_yy in output dock if present ---
+        if hasattr(main, 'effective_length_yy') and main.effective_length_yy is not None:
+            try:
+                debug_val = float(main.effective_length_yy)
+                print(f"[DEBUG] Calculated effective_length_yy: {debug_val}")
+            except Exception:
+                print(f"[DEBUG] Calculated effective_length_yy: {main.effective_length_yy}")
             # print(f"\n self.input_dock_inputs{self.input_dock_inputs}")     
 
 
@@ -1890,8 +1907,8 @@ class Window(QMainWindow):
                 print(f"\n self.design_pref_inputs.keys() {self.design_pref_inputs.keys()}")
                 for key_name in input_list:
                     if input_source == 'Input Dock':
-                        design_dictionary.update({key_name: design_dictionary[input_dock_key]})
-                    else:
+                            design_dictionary.update({key_name: design_dictionary[input_dock_key]})
+                else:
                         try:
                             val = main.get_values_for_design_pref(key_name, design_dictionary)
                         except TypeError:
@@ -2125,6 +2142,7 @@ class Window(QMainWindow):
             # Create a dummy object with a .flag attribute to prevent AttributeError
             class DummyDialog:
                 flag = False
+                ui = None
             self.designPrefDialog = DummyDialog()
         self.design_fn(option_list, data, main)
         # Always run calculation after collecting inputs
@@ -2146,11 +2164,11 @@ class Window(QMainWindow):
                 except Exception:
                     pass
                 self.designPrefDialog = None
-            self.designPrefDialog = DesignPreferences(main, self, input_dictionary=self.input_dock_inputs)
-            if 'Select Section' in self.input_dock_inputs.values():
-                self.designPrefDialog.flag = False
-            else:
-                self.designPrefDialog.flag = True
+                self.designPrefDialog = DesignPreferences(main, self, input_dictionary=self.input_dock_inputs)
+                if 'Select Section' in self.input_dock_inputs.values():
+                    self.designPrefDialog.flag = False
+                else:
+                    self.designPrefDialog.flag = True
             print(f"QDialog done")
             return
 
@@ -2550,7 +2568,7 @@ class Window(QMainWindow):
     '''
     def combined_design_prefer(self, data, main):
 
-        on_change_tab_list = main.tab_value_changed(main)
+        on_change_tab_list = main.tab_value_changed()
         print(f"ui_template combined_design_prefer on_change_tab_list= {on_change_tab_list} \n")
         for new_values in on_change_tab_list:
             (tab_name, key_list, key_to_change, key_type, f) = new_values
@@ -2580,7 +2598,7 @@ class Window(QMainWindow):
         #         if validation_key.text() != "":
         #             self.designPrefDialog.fu_fy_validation_connect([fu_key, fy_key], validation_key, material_key)
 
-        for edit in main.edit_tabs(main):
+        for edit in main.edit_tabs():
             (tab_name, input_dock_key_name, change_typ, f) = edit
             tab = self.designPrefDialog.ui.tabWidget.tabs.findChild(QtWidgets.QWidget, tab_name)
             input_dock_key = self.dockWidgetContents.findChild(QtWidgets.QWidget, input_dock_key_name)
@@ -2595,7 +2613,7 @@ class Window(QMainWindow):
                 # if tab:
                 #     self.designPrefDialog.ui.tabWidget.insertTab(0, tab, tab_name)
 
-        for refresh in main.refresh_input_dock(main):
+        for refresh in main.refresh_input_dock():
             (tab_name, key_name, key_type, tab_key, master_key, value, database_arg) = refresh
             tab = self.designPrefDialog.ui.tabWidget.tabs.findChild(QtWidgets.QWidget, tab_name)
             if tab:
@@ -2655,8 +2673,8 @@ class Window(QMainWindow):
                 if isinstance(k2, QtWidgets.QLineEdit):
                     k2.setText(str(val[k2_key_name]))
                 if isinstance(k2, QtWidgets.QLabel):
-                    pixmap1 = QPixmap(val[k2_key_name])
-                    k2.setPixmap(pixmap1)
+                        pixmap1 = QPixmap(val[k2_key_name])
+                        k2.setPixmap(pixmap1)
 
             if typ == TYPE_OVERWRITE_VALIDATION and not val["Validation"][0]:
                 QMessageBox.warning(tab, "Warning", val["Validation"][1])
@@ -3050,7 +3068,6 @@ class Window(QMainWindow):
         output_fields = {w.objectName(): w for w in self.dockWidgetContents_out.findChildren(QtWidgets.QLineEdit)}
         # Try to match result_dict keys to output field names, allowing for flexible key names
         for field_name, widget in output_fields.items():
-            # Try direct match
             value = result_dict.get(field_name, None)
             # If not found, try common alternate keys (case-insensitive, underscores, spaces)
             if value is None:
@@ -3064,8 +3081,14 @@ class Window(QMainWindow):
                     if field_name.lower() in k.lower() or k.lower() in field_name.lower():
                         value = result_dict[k]
                         break
+            print(f"[DEBUG][ui_template] Setting {field_name} to {value}")
             widget.setText(str(value) if value is not None else "")
             print(f"  {field_name}: {value}")
+        # --- FORCE PATCH: Always set effective_length_yy if present in result_dict ---
+        if "effective_length_yy" in output_fields:
+            forced_val = result_dict.get("effective_length_yy", "")
+            output_fields["effective_length_yy"].setText(str(forced_val))
+            print(f"[DEBUG][ui_template] FORCED set effective_length_yy to {forced_val}")
 
 class Dialog1(QtWidgets.QDialog):
     dialogShown = QtCore.pyqtSignal()

@@ -13,7 +13,6 @@ import math
 import numpy as np
 from PyQt5.QtWidgets import QTextEdit, QMessageBox, QLineEdit, QComboBox, QDialog, QVBoxLayout, QListWidget, QDialogButtonBox, QLabel
 from PyQt5.QtCore import QObject, pyqtSignal
-from PyQt5.QtGui import QPixmap
 from ...Common import *
 from ..connection.moment_connection import MomentConnection
 from ...utils.common.material import *
@@ -22,105 +21,23 @@ from ...utils.common.component import ISection, Material
 from ...utils.common.component import *
 from ..member import Member
 from ...Report_functions import *
-from ...design_report.reportGenerator_latex import CreateLatex
-from pylatex.utils import NoEscape
-from ...Common import *
-from ...utils.common.component import ISection, Material
 from ...utils.common.common_calculation import *
-from ...utils.common.load import Load
 from ..tension_member import *
 from ...utils.common.Section_Properties_Calculator import BBAngle_Properties, I_sectional_Properties, SHS_RHS_Properties, CHS_Properties
-import math
-import numpy as np
 from ...utils.common import is800_2007
-from ...utils.common.component import *
-import logging
-from ..connection.moment_connection import MomentConnection
-from ...utils.common.material import *
-from ...Report_functions import *
 from ...design_report.reportGenerator_latex import CreateLatex
-from pylatex.utils import NoEscape
 from ...Common import TYPE_TAB_4, TYPE_TAB_5 
 from PyQt5.QtWidgets import QLineEdit, QMainWindow, QMessageBox
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QValidator, QDoubleValidator
-from ...gui.ui_template import Window
 from PyQt5.QtWidgets import QComboBox
 from PyQt5.QtWidgets import QDialog, QVBoxLayout, QLabel, QPushButton, QFormLayout, QTableWidget, QTableWidgetItem, QListWidget, QHBoxLayout
 from PyQt5.QtWidgets import QDialogButtonBox
 import sqlite3
-from functools import partial
 import os
-from .LacedColumnDesign import LacedColumnDesign
+import traceback
 from ...utils.common.component import Material
 from ...Common import KEY_LACING_SECTION_DIM
-import logging
-import math
-import numpy as np
-from ..connection.moment_connection import MomentConnection
-from ...utils.common.material import *
-from ...utils.common.load import Load
-from ...utils.common.component import ISection, Material
-from ...utils.common.component import *
-from ..member import Member
-from ...Report_functions import *
-from ...design_report.reportGenerator_latex import CreateLatex
-
-class MaterialDialog(QDialog):
-    def __init__(self, parent=None):
-        super().__init__(parent)
-        self.setWindowTitle("Custom Material")
-        self.setModal(True)
-        self.setup_ui()
-        self.setWindowFlags(self.windowFlags() & ~Qt.WindowContextHelpButtonHint)  # Remove help button
-        
-
-    def setup_ui(self):
-        layout = QFormLayout(self)
-        
-        # Create input fields
-        self.grade_input = QLineEdit()
-        self.fy_20_input = QLineEdit()
-        self.fy_20_40_input = QLineEdit()
-        self.fy_40_input = QLineEdit()
-        self.fu_input = QLineEdit()
-        
-        # Add fields to layout
-        layout.addRow("Grade:", self.grade_input)
-        layout.addRow("Fy (20mm):", self.fy_20_input)
-        layout.addRow("Fy (20-40mm):", self.fy_20_40_input)
-        layout.addRow("Fy (40mm):", self.fy_40_input)
-        layout.addRow("Fu:", self.fu_input)
-        
-        # Add buttons with proper spacing
-        button_box = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
-        button_box.accepted.connect(self.accept)
-        button_box.rejected.connect(self.reject)
-        layout.addRow(button_box)
-
-    def closeEvent(self, event):
-        """Handle dialog close event"""
-        self.reject()
-        event.accept()
-
-    def get_material_data(self):
-        return {
-            'grade': self.grade_input.text(),
-            'fy_20': self.fy_20_input.text(),
-            'fy_20_40': self.fy_20_40_input.text(),
-            'fy_40': self.fy_40_input.text(),
-            'fu': self.fu_input.text()
-        }
-
-class QTextEditLogger(QObject, logging.Handler):
-    """Custom logging handler that writes to a QTextEdit widget"""
-    def __init__(self, text_edit):
-        super().__init__()
-        self.text_edit = text_edit
-
-    def emit(self, record):
-        msg = self.format(record)
-        self.text_edit.append(msg)
 
 class LacedColumn(Member):
     def calculate_effective_length_yy(self, end_condition_1, end_condition_2, unsupported_length_yy):
@@ -164,6 +81,7 @@ class LacedColumn(Member):
                         return True
         except Exception as e:
             print('[DEBUG] Exception in minimize event patch:', e)
+            pass
         return super().event(event)
     def calculate(self, design_dictionary):
         # --- PATCH: Ensure end condition values are always present and correct in design_dictionary ---
@@ -226,9 +144,6 @@ class LacedColumn(Member):
         if end2 and isinstance(end2, str):
             design_dictionary['End Condition 2'] = end2
             design_dictionary['End_2'] = end2
-
-        print("[DEBUG][calculate] Called with design_dictionary:", design_dictionary)
-        print("[DEBUG][calculate] All keys in design_dictionary:")
         for k in design_dictionary:
             print(f"    {k!r}: {design_dictionary[k]!r}")
 
@@ -243,19 +158,17 @@ class LacedColumn(Member):
             )
             # Warn if end1 or end2 is a list, not a string
             if isinstance(end1, list):
-                print(f"[WARNING][calculate] end1 is a list, not a string: {end1}")
                 end1 = None
             if isinstance(end2, list):
-                print(f"[WARNING][calculate] end2 is a list, not a string: {end2}")
                 end2 = None
-            print(f"[DEBUG][calculate] Inputs for effective_length_yy calculation: end1={end1!r}, end2={end2!r}, unsupported_length_yy={unsupported_length_yy!r}")
             if not end1:
                 print("[DEBUG][calculate] MISSING: end1 is not set or empty!")
+                pass
             if not end2:
                 print("[DEBUG][calculate] MISSING: end2 is not set or empty!")
+                pass
             if not unsupported_length_yy:
-                print("[DEBUG][calculate] MISSING: unsupported_length_yy is not set or empty!")
-            if end1 and end2 and unsupported_length_yy:
+                pass
                 try:
                     unsupported_length_yy = float(unsupported_length_yy)
                     eff_len_yy_calc = self.calculate_effective_length_yy(end1, end2, unsupported_length_yy)
@@ -268,6 +181,7 @@ class LacedColumn(Member):
                     print(f"[DEBUG] Calculated effective_length_yy: {eff_len_yy_calc}")
                 except Exception as e:
                     print('[DEBUG] Could not calculate effective_length_yy:', e)
+                pass
             # --- Buckling Curve ZZ ---
             bc_zz_val = None
             if hasattr(self, 'result_bc_zz') and self.result_bc_zz:
@@ -397,19 +311,9 @@ class LacedColumn(Member):
                 for attr in attrs:
                     print(f"  {attr}: {getattr(self, attr, None)}")
         except Exception as e:
-            print('[ERROR] Exception in LacedColumn.calculate:', e)
-            import traceback
             print(traceback.format_exc())
-        print("[DEBUG][calculate] self.effective_length_yy after calculation:", getattr(self, 'effective_length_yy', None))
 
     def reset_output_state(self):
-        """
-        Reset all output/calculated fields to None or empty, so the output dock shows cleared values.
-        Call this ONLY on module open/close or navigation away.
-        DO NOT call this after calculation, or you will lose calculated values for output.
-        """
-        print("[DEBUG][reset_output_state] Called! This will clear all calculated values.")
-        # Main calculated values
         self.effective_length_yy = None
         self.effective_length_zz = None
         self.effective_sr_yy = None
@@ -709,15 +613,6 @@ class LacedColumn(Member):
             section_list = self.fn_profile_section(profile)
             if not section_list:
                 return []
-            
-            dialog = SectionDesignationDialog(section_list)
-            # Optionally, pre-select current values if available
-            current_selected = self.sec_list if hasattr(self, 'sec_list') and self.sec_list else []
-            if current_selected:
-                dialog.list_widget.clearSelection()
-                for i in range(dialog.list_widget.count()):
-                    if dialog.list_widget.item(i).text() in current_selected:
-                        dialog.list_widget.item(i).setSelected(True)
             
             if dialog.exec_() == QDialog.Accepted:
                 selected = dialog.get_selected()
@@ -1322,18 +1217,6 @@ class LacedColumn(Member):
         out_list.append(("fcd_1_zz", "FCD_1 (ZZ)", TYPE_TEXTBOX, fcd_1_zz, True))
         out_list.append(("fcd_2", "FCD_2", TYPE_TEXTBOX, fcd_2, True))
         
-        # Cost
-        out_list.append((None, "Cost", TYPE_TITLE, None, True))
-        cost = ''
-        if flag:
-            if hasattr(self, 'result_cost') and self.result_cost is not None:
-                cost = safe_display(self.result_cost)
-            elif hasattr(self, 'optimum_section_ur_results') and self.optimum_section_ur_results:
-                best_ur = min(self.optimum_section_ur_results.keys()) if self.optimum_section_ur_results else None
-                if best_ur:
-                    cost = safe_display(self.optimum_section_ur_results[best_ur].get('Cost', ''))
-        out_list.append(("cost", "Cost (INR)", TYPE_TEXTBOX, cost, True))
-        
         # --- Channel and Lacing Details Section ---
         out_list.append((None, "Channel and Lacing Details", TYPE_TITLE, None, True))
         spacing_channels = ''
@@ -1449,19 +1332,6 @@ class LacedColumn(Member):
                 return # ['Design Failed, Check Design Report'] @TODO
             elif self.design_status:
                 pass
-            # else:
-            #     input_section_list = getattr(self, 'input_section_list', 'N/A')
-            #     optimum_section_ur = getattr(self, 'optimum_section_ur', 'N/A')
-            #     failed_design_dict = getattr(self, 'failed_design_dict', 'N/A')
-            #     design_status = getattr(self, 'design_status', 'N/A')
-            #     self.logger.info(f"input_section_list: {input_section_list}")
-            #     self.logger.info(f"optimum_section_ur: {optimum_section_ur}")
-            #     self.logger.info(f"failed_design_dict: {failed_design_dict}")
-            #     self.logger.info(f"design_status: {design_status}")
-            #     self.logger.error(
-            #         "Design Failed. No section satisfied UR or section classification filter."
-            #     )
-            #     return # ['Design Failed. Slender Sections Selected']
         else:
             return all_errors
 
@@ -1564,10 +1434,6 @@ class LacedColumn(Member):
             self.optimization_parameter = design_dictionary[KEY_OPTIMIZATION_PARA]
         except:
             self.optimization_parameter = 'Utilization Ratio'
-        # self.allow_class1 = design_dictionary[KEY_ALLOW_CLASS1]
-        # self.allow_class2 = design_dictionary[KEY_ALLOW_CLASS2]
-        # self.allow_class3 = design_dictionary[KEY_ALLOW_CLASS3]
-        # self.allow_class4 = design_dictionary[KEY_ALLOW_CLASS4]
         try:
             self.steel_cost_per_kg = float(design_dictionary[KEY_STEEL_COST])
         except:
@@ -1599,8 +1465,6 @@ class LacedColumn(Member):
     def section_classification(self):
         # Deduplicate section list to avoid repeated processing
         self.sec_list = list(dict.fromkeys(self.sec_list))
-        # self.logger.debug(f"[section_classification] Starting with sec_list: {self.sec_list}")
-        # self.logger.info(f"section_classification called. sec_list: {self.sec_list}, sec_profile: {self.sec_profile}, material: {self.material}")
         local_flag = True
         self.input_section_list = []
         self.input_section_classification = {}
@@ -1744,14 +1608,6 @@ class LacedColumn(Member):
                     flange_ratio <= 9.5 and web_ratio <= 79.5):
                     self.logger.info(f"Reclassifying borderline Slender section {trial_section} to Semi-Compact")
                     self.section_class = 'Semi-Compact'
-
-            # Log section classification details
-            # flange_ratio_str = f"{flange_ratio:.2f}" if flange_ratio is not None else "N/A"
-            # web_ratio_str = f"{web_ratio:.2f}" if web_ratio is not None else "N/A"
-            # self.logger.info(
-            #     f"The section is {self.section_class}. The {trial_section} section has {flange_ratio_str} flange({self.flange_class}) and {web_ratio_str} web({self.web_class}). [Reference: Cl 3.7, IS 800:2007]"
-            # )
-            # 2.2 - Effective length
             self.effective_length_zz = IS800_2007.cl_7_2_2_effective_length_of_prismatic_compression_members(
                 self.length_zz,
                 end_1=self.end_1_z,
@@ -1803,12 +1659,6 @@ class LacedColumn(Member):
                 self.logger.error("Design Failed. All sections are too slender or do not meet requirements.")
                 local_flag = False
 
-        # Print summary at end
-        print("\n=== Section Classification Summary ===")
-        print(f"Accepted sections: {accepted_sections}")
-        print(f"Rejected/slender sections: {slender_sections}")
-        print(f"Final allowed_sections: {self.allowed_sections}")
-        print(f"Final input_section_list: {self.input_section_list}")
         return local_flag
 
 
@@ -1834,8 +1684,6 @@ class LacedColumn(Member):
             self.epsilon = math.sqrt(250 / self.material_property.fy)
             self.optimum_section_ur_results = {}
             self.optimum_section_ur = []
-            self.optimum_section_cost_results = {}
-            self.optimum_section_cost = []
             self.flag = self.section_classification()
             # Remove duplicate sections to avoid repeated calculations
             self.input_section_list = list(dict.fromkeys(self.input_section_list))
@@ -2028,14 +1876,6 @@ class LacedColumn(Member):
                     self.list_zz.append(self.ur)
                     self.list_yy.append(self.ur)
                     self.optimum_section_ur.append(self.ur)
-
-                    # 2.9 - Cost of the section in INR
-                    self.cost = (self.section_property.unit_mass * self.section_property.area * 1e-4) * min(self.length_zz, self.length_yy) * \
-                                self.steel_cost_per_kg
-
-                    self.list_zz.append(self.cost)
-                    self.list_yy.append(self.cost)
-                    self.optimum_section_cost.append(self.cost)
                     
                     # --- Tie Plate, Spacing, and Lacing Angle Calculations ---
                     tie_plate_d = round(2 * self.section_property.depth / 3, 2)         # mm
@@ -2128,11 +1968,6 @@ class LacedColumn(Member):
             self.design_status = False
             self.failed_design_dict = {}
             return
-        # Print summary ONCE after all calculations
-        summary_lines = []
-        summary_lines.append("=== DESIGN SUMMARY ===")
-        summary_lines.append(f"Input section list: {self.input_section_list}")
-        summary_lines.append(f"Optimum URs: {self.optimum_section_ur}")
         best_ur = None
         best_section_results = None
         if self.optimum_section_ur:
@@ -2197,9 +2032,6 @@ class LacedColumn(Member):
             if not hasattr(self, '_already_logged_failure'):
                 self._already_logged_failure = True
                 error_msg = "The sections selected by the solver from the defined list of sections did not satisfy the Utilization Ratio (UR) criteria"
-                self.logger.warning(error_msg)
-                self.logger.error("The solver did not find any adequate section from the defined list.")
-                self.logger.info("Re-define the list of sections or check the Design Preferences option and re-design.")
                 self.failed_reason = error_msg
             self.design_status = False
             if self.failed_design_dict is None or not isinstance(self.failed_design_dict, dict):
@@ -2242,9 +2074,6 @@ class LacedColumn(Member):
             # selecting the section with most optimum UR
             if len(self.optimum_section_ur) == 0:  # no design was successful
                 error_msg = f"The sections selected by the solver from the defined list of sections did not satisfy the Utilization Ratio (UR) criteria. Allowable UR: {self.allowable_utilization_ratio}"
-                self.logger.warning(error_msg)
-                self.logger.error("The solver did not find any adequate section from the defined list.")
-                self.logger.info("Re-define the list of sections or check the Design Preferences option and re-design.")
                 self.failed_reason = error_msg
                 self.design_status = False
                 
@@ -2301,33 +2130,6 @@ class LacedColumn(Member):
             else:
                 self.design_status = True
 
-        # if self.design_status:
-        #     self.logger.info(": ========== Design Status ============")
-        #     self.logger.info(": Overall Column design is SAFE")
-        #     self.logger.info(": ========== End Of Design ============")
-        # else:
-        #     self.logger.info(": ========== Design Status ============")
-        #     self.logger.info(": Overall Column design is UNSAFE")
-        #     if self.failed_reason:
-        #         self.logger.info(f": Failure Reason: {self.failed_reason}")
-        #     self.logger.info(": ========== End Of Design ============")
-
-    ### start writing save_design from here!
-    """def save_design(self, popup_summary):
-
-        if self.connectivity == 'Hollow/Tubular Column Base':
-            if self.dp_column_designation[1:4] == 'SHS':
-                select_section_img = 'SHS'
-            elif self.dp_column_designation[1:4] == 'RHS':
-                select_section_img = 'RHS'
-            else:
-                select_section_img = 'CHS'
-        else:
-            if self.column_properties.flange_slope != 90:
-                select_section_img = "Slope_Beam"
-            else:
-                select_section_img = "Parallel_Beam" """
-    
     def common_result(self, list_result, result_type):
         # Defensive: handle None or wrong type for list_result
         if not isinstance(list_result, dict) or not list_result:
@@ -2902,6 +2704,56 @@ class LacedColumn(Member):
              KEY_SEC_FY: fy}
         return d
 
+    def close_module(self):
+        """
+        Called when the LacedColumn module is closed. Resets all input and output state, and closes any background windows/tabs (like design preferences) that may be open.
+        """
+        print("[DEBUG][close_module] Closing LacedColumn module: resetting state and closing background windows.")
+        # Reset all output/calculated fields
+        self.reset_output_state()
+        # Reset all input fields (QLineEdit, QComboBox, etc.)
+        if hasattr(self, 'unsupported_length_yy_lineedit'):
+            self.unsupported_length_yy_lineedit.setText("")
+        if hasattr(self, 'unsupported_length_zz_lineedit'):
+            self.unsupported_length_zz_lineedit.setText("")
+        if hasattr(self, 'axial_load_lineedit'):
+            self.axial_load_lineedit.setText("")
+        if hasattr(self, 'material_combo'):
+            self.material_combo.setCurrentIndex(0)
+        if hasattr(self, 'connection_combo'):
+            self.connection_combo.setCurrentIndex(0)
+        if hasattr(self, 'lacing_pattern_combo'):
+            self.lacing_pattern_combo.setCurrentIndex(0)
+        if hasattr(self, 'section_profile_combo'):
+            self.section_profile_combo.setCurrentIndex(0)
+        if hasattr(self, 'section_designation_combo'):
+            self.section_designation_combo.setCurrentIndex(0)
+        if hasattr(self, 'design_pref_dialog') and self.design_pref_dialog is not None:
+            try:
+                self.design_pref_dialog.close()
+            except Exception:
+                pass
+            self.design_pref_dialog = None
+        self.sec_list = []
+        self.material = ""
+        print("[DEBUG][close_module] State reset complete.")
+
+    def open_module(self):
+        """
+        Called when the LacedColumn module is opened. Ensures all input/output state is reset (fresh start).
+        """
+        print("[DEBUG][open_module] Opening LacedColumn module: resetting state.")
+        self.close_module()  # Always reset on open
+        print("[DEBUG][open_module] State reset complete.")
+
+    # Ensure all dialogs are modal and do not close the main window
+    def show_dialog(self, dialog):
+        """
+        Utility to show a dialog modally, ensuring it does not affect the main window's state.
+        """
+        dialog.setModal(True)
+        dialog.exec_()
+
 class SectionDesignationDialog(QDialog):
     def __init__(self, section_list, parent=None):
         super().__init__(parent)
@@ -2921,24 +2773,6 @@ class SectionDesignationDialog(QDialog):
     def get_selected(self):
         return [item.text() for item in self.list_widget.selectedItems()]
 
-    # When opening the SectionDesignationDialog for 'Customized', fetch the section list from the database using the selected profile
-    def open_section_designation_dialog(self, selected_profile, current_selected=None, disabled_values=None):
-        if disabled_values is None:
-            disabled_values = []
-        # Fetch all designations for the selected profile from the database
-        section_list = connectdb(selected_profile, call_type="popup")
-        dialog = SectionDesignationDialog(section_list)
-        if current_selected:
-            dialog.list_widget.clearSelection()
-            for i in range(dialog.list_widget.count()):
-                if dialog.list_widget.item(i).text() in current_selected:
-                    dialog.list_widget.item(i).setSelected(True)
-        if dialog.exec_() == QDialog.Accepted:
-            selected = dialog.get_selected()
-            # Use selected as the customized section designation list
-            self.sec_list = selected
-            return selected
-        return None
     def get_section_class(self, flange_class, web_class):
         # Helper to determine section class from flange and web
         if flange_class == 'Plastic' and web_class == 'Plastic':
@@ -2961,23 +2795,3 @@ def safe_float(val):
         return float(val)
     except Exception:
         return 0.0
-
-def debug_results_storage(self):
-        """Debug function to check what values are being stored in the results"""
-        self.logger.info("=== DEBUG: Results Storage ===")
-        if hasattr(self, 'optimum_section_ur_results') and self.optimum_section_ur_results:
-            best_ur = min(self.optimum_section_ur_results.keys()) if self.optimum_section_ur_results else None
-            if best_ur:
-                self.logger.info(f"Best UR: {best_ur}")
-                self.logger.info(f"Available keys in results: {list(self.optimum_section_ur_results[best_ur].keys())}")
-                self.logger.info(f"Effective_length_yy: {self.optimum_section_ur_results[best_ur].get('Effective_length_yy', 'NOT FOUND')}")
-                self.logger.info(f"Effective_SR_yy: {self.optimum_section_ur_results[best_ur].get('Effective_SR_yy', 'NOT FOUND')}")
-        else:
-            self.logger.info("No optimum_section_ur_results available")
-        
-        # Check result attributes
-        self.logger.info(f"result_eff_len_yy: {getattr(self, 'result_eff_len_yy', 'NOT SET')}")
-        self.logger.info(f"result_eff_sr_yy: {getattr(self, 'result_eff_sr_yy', 'NOT SET')}")
-        self.logger.info(f"effective_length_yy: {getattr(self, 'effective_length_yy', 'NOT SET')}")
-        self.logger.info(f"effective_sr_yy: {getattr(self, 'effective_sr_yy', 'NOT SET')}")
-        self.logger.info("=== END DEBUG ===")

@@ -22,7 +22,6 @@ from ...utils.common.component import *
 from ..member import Member
 from ...Report_functions import *
 from ...utils.common.common_calculation import *
-from ..tension_member import *
 from ...utils.common.Section_Properties_Calculator import BBAngle_Properties, I_sectional_Properties, SHS_RHS_Properties, CHS_Properties
 from ...utils.common import is800_2007
 from ...design_report.reportGenerator_latex import CreateLatex
@@ -36,7 +35,7 @@ from PyQt5.QtWidgets import QDialogButtonBox
 import sqlite3
 import os
 import traceback
-from ...utils.common.component import Material
+from ...utils.common.material import Material
 from ...Common import KEY_LACING_SECTION_DIM
 
 class LacedColumn(Member):
@@ -54,20 +53,7 @@ class LacedColumn(Member):
                  ('Hinged', 'Hinged'): 1.0, ('Fixed', 'Free'): 2.0, ('Free', 'Fixed'): 2.0}
         k = conds.get((end_condition_1, end_condition_2), 1.0)
         return k * unsupported_length_yy
-
-    def print_all_section_results(self):
-        """
-        Print all calculated section results to the terminal for debugging and verification.
-        """
-        if hasattr(self, 'optimum_section_ur_results') and self.optimum_section_ur_results:
-            print("\n[DEBUG] All calculated section results:")
-            for ur, result in sorted(self.optimum_section_ur_results.items()):
-                print(f"\nSection UR: {ur}")
-                for k, v in result.items():
-                    print(f"  {k}: {v}")
-        else:
-            print("[DEBUG] No section results available.")
-    # --- Patch: Prevent application from quitting on minimize ---
+    
     def event(self, event):
         # If the event is a window state change and the window is being minimized, ignore close/quit
         try:
@@ -76,7 +62,7 @@ class LacedColumn(Member):
             if event.type() == QEvent.WindowStateChange:
                 if hasattr(self, 'window') and self.window is not None:
                     if self.window.isMinimized():
-                        # Prevent quit/close on minimize
+                        # Prevent quit/close on minimize, keep icon visible
                         event.ignore()
                         return True
         except Exception as e:
@@ -84,6 +70,8 @@ class LacedColumn(Member):
             pass
         return super().event(event)
     def calculate(self, design_dictionary):
+        # Reset only calculation/output state for new design, not the whole module
+        self.reset_state_for_new_design()
         # --- PATCH: Ensure end condition values are always present and correct in design_dictionary ---
         # Try to extract from possible keys, fallback to UI attributes if missing, and update dictionary
         # This ensures end1/end2 are always correct for calculation and output
@@ -344,14 +332,6 @@ class LacedColumn(Member):
         # Any other custom/calculated fields should be reset here as well
     def __init__(self):
         super().__init__()
-        # self.logger = logging.getLogger('Osdag')
-        # self.logger.setLevel(logging.DEBUG)
-        # handler = logging.StreamHandler()
-        # formatter = logging.Formatter(fmt='%(asctime)s - %(name)s - %(levelname)s - %(message)s', datefmt='%Y-%m-%d %H:%M:%S')
-        # handler.setFormatter(formatter)
-        # self.logger.addHandler(handler)
-        # handler = logging.FileHandler('logging_text.log')
-        # self.logger.addHandler(handler)
         self.design_status = False
         self.failed_reason = None  # Track why design failed
         self.result = {}
@@ -371,6 +351,7 @@ class LacedColumn(Member):
         self.module = KEY_DISP_COMPRESSION_LacedColumn
         self.mainmodule = 'Member'
         self.section_designation = None
+        self.dialogs = []  # Track all dialogs/windows opened by this module
         self.design_pref_dialog = None
         self.output_title_fields = {}
         self.double_validator = QDoubleValidator()
@@ -397,6 +378,8 @@ class LacedColumn(Member):
         self.web_class = None
         self.gamma_m0 = 1.1  # As per IS 800:2007, Table 5 for yield stress
         self.material_lookup_cache = {}  # Cache for (material, thickness) lookups
+        self.optimum_section_cost_results = {}  # Initialize to avoid AttributeError
+        self.optimum_section_cost = []  # For cost-based optimization, as in other modules
 
 ###############################################
 # Design Preference Functions Start
@@ -451,11 +434,6 @@ class LacedColumn(Member):
         t5 = (KEY_DISP_COLSEC, [KEY_SECSIZE], [KEY_SOURCE], TYPE_TEXTBOX, self.change_source)
         change_tab.append(t5)
         return change_tab
-
-    def edit_tabs(self):
-        """This function is required if the tab name changes based on connectivity or profile or any other key.
-        Not required for this module but empty list should be passed"""
-        return []
 
     def input_dictionary_design_pref(self):
         """
@@ -550,9 +528,6 @@ class LacedColumn(Member):
     ####################################
     # Design Preference Functions End
     ####################################
-
-    # Setting up logger and Input and Output Docks
-    ####################################
     def module_name(self):
         return KEY_DISP_COMPRESSION_COLUMN
 
@@ -567,20 +542,9 @@ class LacedColumn(Member):
         handler = logging.FileHandler('logging_text.log')
         handler.setFormatter(formatter)
         self.logger.addHandler(handler)
-        # Add QTextEdit logger if widget is provided
-        if widget_or_key is not None and hasattr(widget_or_key, 'append'):
-            class QTextEditLogger(logging.Handler):
-                def __init__(self, text_edit):
-                    super().__init__()
-                    self.text_edit = text_edit
-                def emit(self, record):
-                    msg = self.format(record)
-                    self.text_edit.append(msg)
-            qtext_handler = QTextEditLogger(widget_or_key)
-            qtext_handler.setFormatter(formatter)
-            self.logger.addHandler(qtext_handler)
-        elif widget_or_key is not None:
-            # If it's a key, use your existing OurLog logic
+        # Always use OurLog for colored log messages in the log window
+        if widget_or_key is not None:
+            from ...Common import OurLog
             handler = OurLog(widget_or_key)
             handler.setFormatter(formatter)
             self.logger.addHandler(handler)
@@ -630,17 +594,29 @@ class LacedColumn(Member):
         if disabled_values is None:
             disabled_values = []
         section_list = connectdb(selected_profile, call_type="popup")
-        dialog = SectionDesignationDialog(section_list)
+        # Prevent multiple dialogs
+        if hasattr(self, 'section_designation_dialog') and self.section_designation_dialog is not None:
+            if self.section_designation_dialog.isVisible():
+                self.section_designation_dialog.raise_()
+                self.section_designation_dialog.activateWindow()
+                return None
+        self.section_designation_dialog = SectionDesignationDialog(section_list)
+        self.dialogs.append(self.section_designation_dialog)
         if current_selected:
-            dialog.list_widget.clearSelection()
-            for i in range(dialog.list_widget.count()):
-                if dialog.list_widget.item(i).text() in current_selected:
-                    dialog.list_widget.item(i).setSelected(True)
-        if dialog.exec_() == QDialog.Accepted:
-            selected = dialog.get_selected()
+            self.section_designation_dialog.list_widget.clearSelection()
+            for i in range(self.section_designation_dialog.list_widget.count()):
+                if self.section_designation_dialog.list_widget.item(i).text() in current_selected:
+                    self.section_designation_dialog.list_widget.item(i).setSelected(True)
+        result = None
+        if self.section_designation_dialog.exec_() == QDialog.Accepted:
+            selected = self.section_designation_dialog.get_selected()
             self.sec_list = selected
-            return selected
-        return None
+            result = selected
+        # Remove from dialog tracking
+        if self.section_designation_dialog in self.dialogs:
+            self.dialogs.remove(self.section_designation_dialog)
+        self.section_designation_dialog = None
+        return result
 
     def input_values(self, *args, **kwargs):
         """ 
@@ -798,8 +774,10 @@ class LacedColumn(Member):
         return lst
 
     def output_values(self, flag):
-        # --- DEBUG: Print effective_length_yy at the start of output_values ---
+        # --- DEBUG: Print effective_length_yy and key results at the start of output_values ---
         print("[DEBUG][output_values] self.effective_length_yy:", getattr(self, 'effective_length_yy', None))
+        print("[DEBUG][output_values] self.result_IF_yy:", getattr(self, 'result_IF_yy', None))
+        print("[DEBUG][output_values] self.result_ebs_yy:", getattr(self, 'result_ebs_yy', None))
         if not hasattr(self, 'effective_length_yy') or self.effective_length_yy is None:
             print("[WARNING][output_values] self.effective_length_yy is missing or None at output dock refresh!")
         def get_numeric(val):
@@ -1076,19 +1054,38 @@ class LacedColumn(Member):
         out_list.append((None, "Imperfection Factor", TYPE_TITLE, None, True))
         if_yy = ''
         if_zz = ''
+        def is_numeric(val):
+            try:
+                float(val)
+                return True
+            except Exception:
+                return False
         if flag:
-            if hasattr(self, 'result_IF_yy') and self.result_IF_yy is not None:
+            if hasattr(self, 'result_IF_yy') and self.result_IF_yy is not None and is_numeric(self.result_IF_yy):
                 if_yy = safe_display(self.result_IF_yy)
             elif hasattr(self, 'optimum_section_ur_results') and self.optimum_section_ur_results:
                 best_ur = min(self.optimum_section_ur_results.keys()) if self.optimum_section_ur_results else None
                 if best_ur:
-                    if_yy = safe_display(self.optimum_section_ur_results[best_ur].get('IF_yy', ''))
-            if hasattr(self, 'result_IF_zz') and self.result_IF_zz is not None:
+                    val = self.optimum_section_ur_results[best_ur].get('IF_yy', '')
+                    if is_numeric(val):
+                        if_yy = safe_display(val)
+            # FINAL FALLBACK: use self.result dict if still blank
+            if (not if_yy or if_yy == '') and hasattr(self, 'result') and isinstance(self.result, dict):
+                val = self.result.get('imperfection_factor_yy', '')
+                if is_numeric(val):
+                    if_yy = safe_display(val)
+            if hasattr(self, 'result_IF_zz') and self.result_IF_zz is not None and is_numeric(self.result_IF_zz):
                 if_zz = safe_display(self.result_IF_zz)
             elif hasattr(self, 'optimum_section_ur_results') and self.optimum_section_ur_results:
                 best_ur = min(self.optimum_section_ur_results.keys()) if self.optimum_section_ur_results else None
                 if best_ur:
-                    if_zz = safe_display(self.optimum_section_ur_results[best_ur].get('IF_zz', ''))
+                    val = self.optimum_section_ur_results[best_ur].get('IF_zz', '')
+                    if is_numeric(val):
+                        if_zz = safe_display(val)
+            if (not if_zz or if_zz == '') and hasattr(self, 'result') and isinstance(self.result, dict):
+                val = self.result.get('imperfection_factor_zz', '')
+                if is_numeric(val):
+                    if_zz = safe_display(val)
         out_list.append(("imperfection_factor_yy", "Imperfection Factor (YY)", TYPE_TEXTBOX, if_yy, True))
         out_list.append(("imperfection_factor_zz", "Imperfection Factor (ZZ)", TYPE_TEXTBOX, if_zz, True))
         
@@ -1097,18 +1094,30 @@ class LacedColumn(Member):
         ebs_yy = ''
         ebs_zz = ''
         if flag:
-            if hasattr(self, 'result_ebs_yy') and self.result_ebs_yy is not None:
+            if hasattr(self, 'result_ebs_yy') and self.result_ebs_yy is not None and is_numeric(self.result_ebs_yy):
                 ebs_yy = safe_display(self.result_ebs_yy)
             elif hasattr(self, 'optimum_section_ur_results') and self.optimum_section_ur_results:
                 best_ur = min(self.optimum_section_ur_results.keys()) if self.optimum_section_ur_results else None
                 if best_ur:
-                    ebs_yy = safe_display(self.optimum_section_ur_results[best_ur].get('EBS_yy', ''))
-            if hasattr(self, 'result_ebs_zz') and self.result_ebs_zz is not None:
+                    val = self.optimum_section_ur_results[best_ur].get('EBS_yy', '')
+                    if is_numeric(val):
+                        ebs_yy = safe_display(val)
+            if (not ebs_yy or ebs_yy == '') and hasattr(self, 'result') and isinstance(self.result, dict):
+                val = self.result.get('euler_buckling_stress_yy', '')
+                if is_numeric(val):
+                    ebs_yy = safe_display(val)
+            if hasattr(self, 'result_ebs_zz') and self.result_ebs_zz is not None and is_numeric(self.result_ebs_zz):
                 ebs_zz = safe_display(self.result_ebs_zz)
             elif hasattr(self, 'optimum_section_ur_results') and self.optimum_section_ur_results:
                 best_ur = min(self.optimum_section_ur_results.keys()) if self.optimum_section_ur_results else None
                 if best_ur:
-                    ebs_zz = safe_display(self.optimum_section_ur_results[best_ur].get('EBS_zz', ''))
+                    val = self.optimum_section_ur_results[best_ur].get('EBS_zz', '')
+                    if is_numeric(val):
+                        ebs_zz = safe_display(val)
+            if (not ebs_zz or ebs_zz == '') and hasattr(self, 'result') and isinstance(self.result, dict):
+                val = self.result.get('euler_buckling_stress_zz', '')
+                if is_numeric(val):
+                    ebs_zz = safe_display(val)
         out_list.append(("euler_buckling_stress_yy", "Euler Buckling Stress (YY)", TYPE_TEXTBOX, ebs_yy, True))
         out_list.append(("euler_buckling_stress_zz", "Euler Buckling Stress (ZZ)", TYPE_TEXTBOX, ebs_zz, True))
         
@@ -1272,66 +1281,59 @@ class LacedColumn(Member):
         return out_list
 
     def func_for_validation(self, design_dictionary):
-
         all_errors = []
         self.design_status = False
         flag = False
         option_list = self.input_values()
         missing_fields_list = []
-        # Only check truly required fields; allow optional fields to be missing
-        for option in option_list:
-            key = option[0]
-            label = option[1]
-            field_type = option[2]
+        # Only check truly required fields
+        required_keys = [KEY_SECSIZE, KEY_SEC_MATERIAL, KEY_UNSUPPORTED_LEN_ZZ, KEY_UNSUPPORTED_LEN_YY, KEY_AXIAL]
+        required_labels = {KEY_SECSIZE: 'Section Size',
+                          KEY_SEC_MATERIAL: 'Material',
+                          KEY_UNSUPPORTED_LEN_ZZ: 'Actual Length (z-z), mm',
+                          KEY_UNSUPPORTED_LEN_YY: 'Actual Length (y-y), mm',
+                          KEY_AXIAL: 'Axial Load (kN)'}
+        for key in required_keys:
             value = design_dictionary.get(key, None)
-            # Only block if a critical field is missing
-            if field_type == TYPE_TEXTBOX and key in [KEY_SECSIZE, KEY_SEC_MATERIAL, KEY_UNSUPPORTED_LEN_ZZ, KEY_UNSUPPORTED_LEN_YY, KEY_AXIAL]:
-                if value in [None, '', [], 'Select', 'Select Section', 'Select Material']:
-                    missing_fields_list.append(label)
-            # For other fields, just warn and skip related calculations
-        # Additional required field checks
-        sec_list = design_dictionary.get(KEY_SECSIZE, [])
-        # Only add to missing_fields_list if sec_list is empty or only contains 'Select Section'
-        if not sec_list or (isinstance(sec_list, list) and all(s in ['', 'Select Section'] for s in sec_list)):
-            missing_fields_list.append('Section Size')
-        material = design_dictionary.get(KEY_SEC_MATERIAL, '')
-        if not material or material in ['', 'Select Material']:
-            missing_fields_list.append('Material')
-        len_zz = design_dictionary.get(KEY_UNSUPPORTED_LEN_ZZ, None)
-        len_yy = design_dictionary.get(KEY_UNSUPPORTED_LEN_YY, None)
+            if value in [None, '', [], 'Select', 'Select Section', 'Select Material']:
+                missing_fields_list.append(required_labels.get(key, key))
+        # Additional checks for numeric values
         try:
-            if float(len_zz) <= 0:
+            if float(design_dictionary.get(KEY_UNSUPPORTED_LEN_ZZ, 0)) <= 0:
                 missing_fields_list.append('Actual Length (z-z), mm')
         except:
             missing_fields_list.append('Actual Length (z-z), mm')
         try:
-            if float(len_yy) <= 0:
+            if float(design_dictionary.get(KEY_UNSUPPORTED_LEN_YY, 0)) <= 0:
                 missing_fields_list.append('Actual Length (y-y), mm')
         except:
             missing_fields_list.append('Actual Length (y-y), mm')
-        axial = design_dictionary.get(KEY_AXIAL, None)
         try:
-            if float(axial) <= 0:
+            if float(design_dictionary.get(KEY_AXIAL, 0)) <= 0:
                 missing_fields_list.append('Axial Load (kN)')
         except:
             missing_fields_list.append('Axial Load (kN)')
         if len(missing_fields_list) > 0:
             error = self.generate_missing_fields_error_string(missing_fields_list)
             all_errors.append(error)
-            self.logger.error(f"Missing/invalid input fields: {', '.join(missing_fields_list)}")
+            if hasattr(self, 'logger'):
+                self.logger.error(f"Missing/invalid input fields: {', '.join(missing_fields_list)}")
             return all_errors
         else:
             flag = True
         if flag:
-
             self.set_input_values(design_dictionary)
-            if self.design_status == False and self.failed_design_dict is not None and len(self.failed_design_dict) > 0:
-                self.logger.error(
-                    "Design Failed, Check Design Report"
-                )
-                return # ['Design Failed, Check Design Report'] @TODO
+            if self.design_status == False and hasattr(self, 'failed_design_dict') and self.failed_design_dict is not None and len(self.failed_design_dict) > 0:
+                if hasattr(self, 'logger'):
+                    self.logger.error("Design Failed, Check Design Report")
+                return # ['Design Failed, Check Design Report']
             elif self.design_status:
                 pass
+        else:
+            return all_errors
+        # Ensure None is returned if there are no errors
+        if not all_errors:
+            return None
         else:
             return all_errors
 
@@ -1794,6 +1796,12 @@ class LacedColumn(Member):
                     self.list_zz.append(self.imperfection_factor_zz)
                     self.list_yy.append(self.imperfection_factor_yy)
 
+                    # Store imperfection factors for output
+                    self.result_IF_zz = float(self.imperfection_factor_zz) if self.imperfection_factor_zz is not None else None
+                    self.result_IF_yy = float(self.imperfection_factor_yy) if self.imperfection_factor_yy is not None else None
+                    self.result['imperfection_factor_yy'] = self.result_IF_yy
+                    self.result['imperfection_factor_zz'] = self.result_IF_zz
+
                     # 2.2 - Effective length
                     self.effective_length_zz = IS800_2007.cl_7_2_2_effective_length_of_prismatic_compression_members(self.length_zz ,
                                                                                                                     end_1=self.end_1_z,
@@ -1818,6 +1826,12 @@ class LacedColumn(Member):
 
                     self.list_zz.append(self.euler_bs_zz)
                     self.list_yy.append(self.euler_bs_yy)
+
+                    # Store euler buckling stress for output
+                    self.result_ebs_zz = float(self.euler_bs_zz) if self.euler_bs_zz is not None else None
+                    self.result_ebs_yy = float(self.euler_bs_yy) if self.euler_bs_yy is not None else None
+                    self.result['euler_buckling_stress_yy'] = self.result_ebs_yy
+                    self.result['euler_buckling_stress_zz'] = self.result_ebs_zz
 
                     # 2.5 - Non-dimensional effective slenderness ratio
                     self.non_dim_eff_sr_zz = math.sqrt(self.material_property.fy / self.euler_bs_zz)
@@ -1900,6 +1914,10 @@ class LacedColumn(Member):
                         self.optimum_section_ur_results[ur]['channel_spacing'] = spacing_between_channels
                         self.optimum_section_ur_results[ur]['lacing_spacing'] = lacing_angle
 
+                    # Calculate and store cost for this section (needed for cost-based optimization)
+                    self.cost = (self.section_property.unit_mass * self.section_property.area * 1e-4) * min(self.length_zz, self.length_yy) * self.steel_cost_per_kg
+                    self.optimum_section_cost.append(self.cost)
+
                     #tieplate
                     # 2.X - Tie Plate Dimensions
                     self.tie_plate_d = round(2 * self.section_property.depth / 3, 2)         # mm
@@ -1943,6 +1961,11 @@ class LacedColumn(Member):
                     section_result['Effective_length_yy'] = self.effective_length_yy
                     section_result['Effective_sr_yy'] = self.effective_sr_yy
                     section_result['Effective_sr_zz'] = self.effective_sr_zz
+                    # Explicitly set IF_yy, IF_zz, EBS_yy, EBS_zz to calculated values
+                    section_result['IF_yy'] = self.result_IF_yy
+                    section_result['IF_zz'] = self.result_IF_zz
+                    section_result['EBS_yy'] = self.result_ebs_yy
+                    section_result['EBS_zz'] = self.result_ebs_zz
                     # ...store other results as needed...
                     self.optimum_section_ur_results[self.ur] = section_result
                     list_2 = self.list_zz + self.list_yy
@@ -2704,94 +2727,53 @@ class LacedColumn(Member):
              KEY_SEC_FY: fy}
         return d
 
-    def close_module(self):
-        """
-        Called when the LacedColumn module is closed. Resets all input and output state, and closes any background windows/tabs (like design preferences) that may be open.
-        """
-        print("[DEBUG][close_module] Closing LacedColumn module: resetting state and closing background windows.")
-        # Reset all output/calculated fields
-        self.reset_output_state()
-        # Reset all input fields (QLineEdit, QComboBox, etc.)
-        if hasattr(self, 'unsupported_length_yy_lineedit'):
-            self.unsupported_length_yy_lineedit.setText("")
-        if hasattr(self, 'unsupported_length_zz_lineedit'):
-            self.unsupported_length_zz_lineedit.setText("")
-        if hasattr(self, 'axial_load_lineedit'):
-            self.axial_load_lineedit.setText("")
-        if hasattr(self, 'material_combo'):
-            self.material_combo.setCurrentIndex(0)
-        if hasattr(self, 'connection_combo'):
-            self.connection_combo.setCurrentIndex(0)
-        if hasattr(self, 'lacing_pattern_combo'):
-            self.lacing_pattern_combo.setCurrentIndex(0)
-        if hasattr(self, 'section_profile_combo'):
-            self.section_profile_combo.setCurrentIndex(0)
-        if hasattr(self, 'section_designation_combo'):
-            self.section_designation_combo.setCurrentIndex(0)
-        if hasattr(self, 'design_pref_dialog') and self.design_pref_dialog is not None:
-            try:
-                self.design_pref_dialog.close()
-            except Exception:
-                pass
-            self.design_pref_dialog = None
-        self.sec_list = []
-        self.material = ""
-        print("[DEBUG][close_module] State reset complete.")
-
     def open_module(self):
         """
         Called when the LacedColumn module is opened. Ensures all input/output state is reset (fresh start).
+        Only call this on explicit user action (not on value change or design).
         """
         print("[DEBUG][open_module] Opening LacedColumn module: resetting state.")
-        self.close_module()  # Always reset on open
+        self.close_module(explicit_user_action=False)  # Always reset on open, no message
         print("[DEBUG][open_module] State reset complete.")
 
-    # Ensure all dialogs are modal and do not close the main window
+    # --- Centralized dialog management ---
     def show_dialog(self, dialog):
         """
-        Utility to show a dialog modally, ensuring it does not affect the main window's state.
+        Show a dialog modally, but only if not already open. Track it for later closing.
         """
+        if dialog in self.dialogs:
+            if dialog.isVisible():
+                dialog.raise_()
+                dialog.activateWindow()
+                return
+        self.dialogs.append(dialog)
         dialog.setModal(True)
         dialog.exec_()
+        if dialog in self.dialogs:
+            self.dialogs.remove(dialog)
 
-class SectionDesignationDialog(QDialog):
-    def __init__(self, section_list, parent=None):
-        super().__init__(parent)
-        self.setWindowTitle("Select Section Designations")
-        self.setModal(True)
-        self.selected_sections = []
-        layout = QVBoxLayout(self)
-        self.list_widget = QListWidget()
-        self.list_widget.addItems(section_list)
-        self.list_widget.setSelectionMode(QListWidget.MultiSelection)
-        layout.addWidget(self.list_widget)
-        button_box = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
-        button_box.accepted.connect(self.accept)
-        button_box.rejected.connect(self.reject)
-        layout.addWidget(button_box)
-
-    def get_selected(self):
-        return [item.text() for item in self.list_widget.selectedItems()]
-
-    def get_section_class(self, flange_class, web_class):
-        # Helper to determine section class from flange and web
-        if flange_class == 'Plastic' and web_class == 'Plastic':
-            return 'Plastic'
-        elif 'Plastic' in [flange_class, web_class] and 'Compact' in [flange_class, web_class]:
-            return 'Compact'
-        elif 'Plastic' in [flange_class, web_class] and 'Semi-Compact' in [flange_class, web_class]:
-            return 'Semi-Compact'
-        elif flange_class == 'Compact' and web_class == 'Compact':
-            return 'Compact'
-        elif 'Compact' in [flange_class, web_class] and 'Semi-Compact' in [flange_class, web_class]:
-            return 'Semi-Compact'
-        elif flange_class == 'Semi-Compact' and web_class == 'Semi-Compact':
-            return 'Semi-Compact'
-        else:
-            return 'Slender'
-
-def safe_float(val):
-    try:
-        return float(val)
-    except Exception:
-        return 0.0
+    def reset_state_for_new_design(self):
+        """
+        Reset only calculation/output state for a new design, without closing dialogs or clearing input widgets.
+        """
+        self.reset_output_state()
+        self.design_status = False
+        self.failed_reason = None
+        self.result = {}
+        self.utilization_ratio = 0
+        self.area = 0
+        self.epsilon = 1.0
+        self.fy = 0
+        self.section = None
+        self.weld_size = ''
+        self.weld_type = ''
+        self.weld_strength = 0
+        self.lacing_incl_angle = 0
+        self.lacing_section = ''
+        self.lacing_type = ''
+        self.allowed_utilization = ''
+        self.section_designation = None
+        self.output_title_fields = {}
+        self.material_lookup_cache = {}
+        self.optimum_section_cost_results = {}
+        self.optimum_section_cost = []

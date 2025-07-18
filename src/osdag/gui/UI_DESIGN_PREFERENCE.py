@@ -40,6 +40,8 @@ class Ui_Form(QDialog):
     def __init__(self, main, input_dictionary, save_changes_list, parent=None):
         super().__init__(parent)
         self.setupUi(self, main, input_dictionary, save_changes_list)
+        # Ensure the dialog has normal window flags (minimize, maximize, close)
+        self.setWindowFlags(Qt.Window | Qt.WindowMinimizeButtonHint | Qt.WindowMaximizeButtonHint | Qt.WindowCloseButtonHint)
 
 
     def setupUi(self, DesignPreferences, main, input_dictionary, save_changes_list):
@@ -1474,41 +1476,31 @@ class Ui_Form(QDialog):
 class DesignPreferences():
 
     def __init__(self, main, module_window, input_dictionary, parent=None):
-
         self.dialog = QtWidgets.QDialog()
         self.save_changes_list = []
         self.ui = Ui_Form(main, input_dictionary, self.save_changes_list)
-        self.ui.show()
-        self.dialog.show()
-        #self.ui.setupUi(self, main, input_dictionary)
-        #self.ui.show()
+        # self.ui.show()  # REMOVE: Do not show UI automatically
+        # self.dialog.show()  # REMOVE: Do not show dialog automatically
         self.main_controller = parent
-        #self.uiobj = self.main_controller.uiObj
         self.module_window = module_window
         self.saved = None
         self.flag = False
         self.sectionalprop = I_sectional_Properties()
-        #self.ui.btn_save.hide()
         self.ui.btn_save.clicked.connect(self.close_designPref)
         self.ui.btn_defaults.clicked.connect(lambda: self.default_fn(main, input_dictionary))
         self.module = main.module_name()
         self.main = main
-        self.window_close_flag = True
+        self.window_close_flag = False  # Only set True when user clicks close
         self.changes = None
-        # Connect dynamic update signals for design preferences
-        # module_window.combined_design_prefer(input_dictionary, main)
 
     def show(self):
         resolution = QtWidgets.QDesktopWidget().screenGeometry()
         width = resolution.width()
         height = resolution.height()
-        # self.ui.resize(width*(0.67),height*(0.60))
         self.ui.resize(int(width * 0.7), int(height * 0.6))
-        # self.ui.center()
-        # self.ui.tabWidget.resize(width * (0.67), height * (0.60))
         self.ui.setWindowFlag(Qt.WindowMinimizeButtonHint, True)
         self.ui.setWindowFlag(Qt.WindowMaximizeButtonHint, True)
-        #self.ui.center()
+        self.ui.setWindowFlag(Qt.WindowCloseButtonHint, True)
         self.changes = self.ui.exec_()
         if self.changes != QDialog.Accepted:
             self.flag = False
@@ -1729,16 +1721,8 @@ class DesignPreferences():
         return {'lower': lower_fy, 'upper': upper_fy}
 
     def closeEvent(self, event):
-        if self.window_close_flag:
-            event.accept()
-            # self.module_window.prev_inputs = self.module_window.input_dock_inputs
-        else:
-            QMessageBox.warning(self, "Error", "Select correct values for fu and fy!")
-            event.ignore()
+        event.accept()
 
     def close_designPref(self):
+        self.window_close_flag = True
         self.ui.accept()
-
-    # def closeEvent(self, QCloseEvent):
-    #     self.save_designPref_para()
-    #     QCloseEvent.accept()
